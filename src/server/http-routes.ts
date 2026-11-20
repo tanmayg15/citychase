@@ -240,6 +240,15 @@ export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
     const config = lookupOwn(integrations, integrationName)
     const billingMode = config?.billing ?? 'developer'
 
+    // City Chase cost safety: the browser may not call integrations directly.
+    // Unlisted integrations default to owner billing, so this route would let
+    // any signed-in user spend the owner's credits past every cap and the kill
+    // switch. Paid calls go through server actions (tools.integration), which
+    // reach the api-worker directly and do not use this route.
+    if (!config?.clientCallable) {
+      return c.json({ error: 'This integration is server-only' }, 403)
+    }
+
     // Sign-in is required unless the app opts this integration into anonymous
     // use; developer billing would otherwise let any visitor spend the owner's
     // credits. User billing always needs a caller to bill.

@@ -22,9 +22,14 @@
 
 export const integrations: Record<
   string,
-  { billing: 'developer' | 'user'; anonymous?: boolean }
+  /** clientCallable: allow the browser proxy route (/api/integrations/...). Off by default in City Chase. */
+  { billing: 'developer' | 'user'; anonymous?: boolean; clientCallable?: boolean }
 > = {
   google: { billing: 'user' },
   composio: { billing: 'user' },
-  // openai: { billing: 'developer', anonymous: true },
+  // City Chase: owner-paid, called ONLY from server actions, which enforce
+  // caching, per-user/global caps and the owner kill switch.
+  openweathermap: { billing: 'developer' },
+  anthropic: { billing: 'developer' },
+  email: { billing: 'developer' },
 }
