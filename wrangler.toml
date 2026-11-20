@@ -32,6 +32,10 @@ APP_NAME = "citychase"
 # Exact comma-separated native callback URIs. Set this before deploying an
 # Expo client, for example: "myapp://auth/callback".
 NATIVE_AUTH_REDIRECT_URIS = ""
+# City Chase cost safety: "live" ALLOWS real paid integration calls; the owner
+# kill switch in /ops (default OFF) and the daily caps still apply. Anything else = mock.
+# Switched to live 2026-11-20 at Tanmay's request (CP4).
+INTEGRATIONS_MODE = "live"
 
 [[migrations]]
 tag = "v1"
