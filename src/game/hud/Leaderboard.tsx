@@ -11,7 +11,8 @@ export interface LeaderRow {
   name: string
   score: number
   runId: string
-  guest?: boolean
+  /** Stored as a number (0/1) by the record room, so never render it with a bare `&&`. */
+  guest?: boolean | number
   fromBoard?: string
 }
 
@@ -62,7 +63,7 @@ function Row({ rank, row, me }: { rank: number; row: LeaderRow; me: boolean }) {
             <span className="block truncate text-[11px] text-white/45">{boardLabel(row.fromBoard, row.cityId)}</span>
           )}
         </span>
-        {row.guest && <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">guest</span>}
+        {Boolean(row.guest) && <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">guest</span>}
       </span>
       <span className="font-mono tabular-nums">{row.score.toLocaleString('en-US')}</span>
     </li>
