@@ -101,7 +101,7 @@ export default function Lobby() {
       </header>
 
       <main className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 pb-14 sm:px-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
-        <div className="flex min-h-0 flex-col gap-4">
+        <div className="flex min-h-0 flex-col justify-between gap-4">
           {/* Today's heist */}
           <section className="shrink-0 rounded-2xl border border-orange-400/30 bg-black/50 p-5 backdrop-blur-md">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -128,7 +128,7 @@ export default function Lobby() {
           </section>
 
           {/* Free play */}
-          <section className={`${panel} flex flex-col border-cyan-400/25 p-5`} data-testid="free-play">
+          <section className={`${panel} flex max-w-3xl flex-col border-cyan-400/25 p-5`} data-testid="free-play">
             <div className="flex items-baseline justify-between">
               <h2 className="text-lg font-bold">Free play</h2>
               <p className="text-xs text-white/50">{CITY_MAZES.length} real cities · any weather</p>
@@ -157,18 +157,15 @@ export default function Lobby() {
                   {WEATHER_LABEL[w]}
                 </button>
               ))}
-              <button
-                onClick={() => go(`/play?mode=free&city=${encodeURIComponent(cityId)}&weather=${weather}`)}
-                data-testid="play-free"
-                className="group ml-auto flex items-center gap-3 rounded-xl border border-cyan-300/70 bg-gradient-to-r from-cyan-500/25 to-sky-600/25 px-4 py-2 text-left shadow-[0_0_22px_rgba(55,245,255,0.35)] transition hover:scale-[1.03] hover:border-cyan-200 hover:shadow-[0_0_30px_rgba(55,245,255,0.6)]"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-300 text-sm text-black shadow-[0_0_14px_#37f5ff]">▶</span>
-                <span className="leading-tight">
-                  <span className="block text-sm font-black tracking-wider text-cyan-100">DRIVE</span>
-                  <span className="block text-xs text-white/70">{pick.city} · {pick.name} · {WEATHER_LABEL[weather]}</span>
-                </span>
-              </button>
             </div>
+            <button
+              onClick={() => go(`/play?mode=free&city=${encodeURIComponent(cityId)}&weather=${weather}`)}
+              data-testid="play-free"
+              className="mt-4 flex w-full items-center justify-between gap-3 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-500 px-6 py-3.5 text-black shadow-[0_0_28px_rgba(55,245,255,0.5)] transition hover:scale-[1.01] hover:brightness-110"
+            >
+              <span className="text-lg font-black tracking-wide">▶ DRIVE {pick.city.toUpperCase()}</span>
+              <span className="truncate text-sm font-semibold text-black/70">{pick.name} · {WEATHER_LABEL[weather]}</span>
+            </button>
           </section>
         </div>
 

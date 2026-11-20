@@ -347,3 +347,8 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Lobby layout, Quit button, Drive button (2026-11-20)
+- Tanmay asked: Free play box bottom-left above the ticker so the 3D background shows more; "Quit to lobby" icon looked bad and should just say Quit; Drive button still not good.
+- Agent did: the left column puts Today's heist on top and Free play at the bottom (measured at 1440×900: Free play bottom 844 px, ticker top 863 px, no page scroll). Drive is now a full-width solid cyan bar ("▶ DRIVE NEW YORK" + district · weather), matching the orange "Play today's heist" button. Pause/end buttons use small SVG line icons (Restart, Quit) instead of text glyphs; the label is just "Quit". Checked in the browser.
+- Deployed together with the all-time leaderboard and pause/Drive restyle (commit 2d3d047) after Tanmay asked to "deploy all together".
