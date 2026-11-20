@@ -105,13 +105,17 @@ describe('older runs still replay (isReplayable)', () => {
     }
   })
 
-  it('accepts v2, v3 without a disguise, and the current version', () => {
-    expect(ENGINE_VERSION).toBe(4)
-    expect(isReplayable(4, [[3, Gadget.Disguise]])).toBe(true)
-    expect(isReplayable(2, [[3, Dir.Up]])).toBe(true)
-    expect(isReplayable(3, [[3, Dir.Up], [9, Gadget.Nitro]])).toBe(true)
-    expect(isReplayable(3, [[3, Gadget.Disguise]])).toBe(false)
-    expect(isReplayable(1, [])).toBe(false)
+  it('accepts older runs only where later rule changes cannot affect them', () => {
+    expect(ENGINE_VERSION).toBe(5)
+    expect(isReplayable(5, [[3, Gadget.Disguise]], 'mist')).toBe(true)
+    expect(isReplayable(2, [[3, Dir.Up]], 'clear')).toBe(true)
+    expect(isReplayable(3, [[3, Dir.Up], [9, Gadget.Nitro]], 'rain')).toBe(true)
+    expect(isReplayable(3, [[3, Gadget.Disguise]], 'clear')).toBe(false) // v4 changed the disguise
+    expect(isReplayable(4, [[3, Gadget.Disguise]], 'clear')).toBe(true)
+    expect(isReplayable(4, [], 'mist')).toBe(false) // v5 changed fog
+    expect(isReplayable(2, [], 'mist')).toBe(false)
+    expect(isReplayable(1, [], 'clear')).toBe(false)
+    expect(isReplayable(6, [], 'clear')).toBe(false)
   })
 })
 
@@ -228,10 +232,34 @@ describe('rules', () => {
   })
 })
 
+describe('fog in play', () => {
+  it('a cop 6 tiles down a straight street sees you on a clear day but not in fog', () => {
+    // canSee(maze, copX, copY, facing, playerX, playerY, range): range comes from copVision.
+    const m = config().maze
+    const clear = weatherToModifiers(CLEAR_WEATHER).copVision
+    const fog = weatherToModifiers({ ...CLEAR_WEATHER, condition: 'mist' }).copVision
+    expect(6 <= clear && 6 > fog).toBe(true)
+    // Find an open straight run of 7 tiles to check canSee with each range.
+    for (let y = 0; y < m.height; y++) for (let x = 0; x + 6 < m.width; x++) {
+      let open = true
+      for (let i = 0; i <= 6; i++) if (m.cells[y * m.width + x + i] === 1) open = false
+      if (!open) continue
+      expect(canSee(m, x, y, Dir.Right, x + 6, y, clear)).toBe(true)
+      expect(canSee(m, x, y, Dir.Right, x + 6, y, fog)).toBe(false)
+      return
+    }
+    throw new Error('no straight street in the test maze')
+  })
+})
+
 describe('weatherToModifiers', () => {
   it('maps conditions to modifiers', () => {
     expect(weatherToModifiers(CLEAR_WEATHER)).toEqual({ slipTiles: 0, wind: null, visionRadius: null, copVision: 8, powerTicks: 100 })
     expect(weatherToModifiers({ ...CLEAR_WEATHER, condition: 'snow' }).slipTiles).toBe(1)
+    // Fog shortens cop sight (to 4 tiles), more than night alone (5); clear day is 8.
+    expect(weatherToModifiers({ ...CLEAR_WEATHER, condition: 'mist' }).copVision).toBe(4)
+    expect(weatherToModifiers({ ...CLEAR_WEATHER, condition: 'mist', isNight: true }).copVision).toBe(4)
+    expect(weatherToModifiers({ ...CLEAR_WEATHER, isNight: true }).copVision).toBe(5)
     expect(weatherToModifiers({ ...CLEAR_WEATHER, isNight: true })).toMatchObject({ visionRadius: 5, copVision: 5 })
     expect(weatherToModifiers({ ...CLEAR_WEATHER, tempC: 31 }).powerTicks).toBe(160)
     // Wind FROM the west (270°) blows ghosts east (Right).

@@ -22,19 +22,21 @@ export const MAX_TICKS = 3 * 60 * TICK_RATE // runs are capped at 3 minutes
 export const MAX_INPUTS = 4000
 export const START_LIVES = 3
 /** Bump when rules change: stored with each run so old replays can be told apart. */
-export const ENGINE_VERSION = 4
+export const ENGINE_VERSION = 5
 /**
  * Can a run recorded under an older engine version be replayed here move for
- * move (used to let older top runs race as ghosts)?
- *  - v2: no gadgets at all; v3 only added gadgets (inputs 5-7) and crates
- *    (no effect unless a gadget is used), so a v2 log plays out unchanged.
- *  - v3: identical to v4 unless the disguise was used (v4 made a disguised car
- *    uncatchable), so a v3 log without a disguise input replays unchanged.
+ * move (used to let older top runs race as ghosts)? Each version's change and
+ * the runs it cannot affect:
+ *  - v3 added gadgets (inputs 5-7) and crates: no effect on v2 logs.
+ *  - v4 made a disguised car uncatchable: no effect if the disguise was never used.
+ *  - v5 made fog ('mist') shorten cop sight: no effect on runs in other weather.
  */
-export function isReplayable(version: number, log: ReadonlyArray<readonly [number, number]>): boolean {
-  if (version === ENGINE_VERSION || version === 2) return true
-  if (version === 3) return !log.some(([, input]) => input === Gadget.Disguise)
-  return false
+export function isReplayable(version: number, log: ReadonlyArray<readonly [number, number]>, condition: string): boolean {
+  if (version === ENGINE_VERSION) return true
+  if (version < 2 || version > ENGINE_VERSION) return false
+  if (condition === 'mist') return false // v5
+  if (version === 3 && log.some(([, input]) => input === Gadget.Disguise)) return false // v4
+  return true
 }
 
 export const PLAYER_PERIOD = 4 // ticks per tile (5 tiles/s)

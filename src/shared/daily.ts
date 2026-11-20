@@ -83,6 +83,7 @@ export function ruleBadges(w: WeatherSnapshot): string[] {
   if (m.slipTiles) out.push('Wet roads: your car slides')
   if (m.wind) out.push(`Crosswind pushes patrols ${ARROWS[m.wind.dir]}`)
   if (m.visionRadius !== null) out.push('Night: short sight, shorter headlights')
+  if (w.condition === 'mist') out.push('Fog: cops only see 4 tiles ahead')
   if (m.powerTicks > 100) out.push('Heat: smoke lasts longer')
   if (out.length === 0) out.push('Clear: no modifiers')
   return out

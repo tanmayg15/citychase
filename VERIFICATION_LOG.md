@@ -465,3 +465,12 @@ Tests:
 
 192 tests pass; tsc and eslint are clean.
 **Needs human verification:** disguise, then drive through a cop in the live game.
+
+## 2026-11-20 — Fog is now a real rule (engine v5)
+**Found by the agent:** the About page and writeup said fog shortens cop sight, but the engine ignored fog (it was only 3D haze).
+**Agent did:**
+- Fog (`mist`) now limits cop headlights to 4 tiles (day 8, night 5), and the game shows a "Fog: cops only see 4 tiles ahead" rule badge. `ENGINE_VERSION` went from 4 to 5.
+- `isReplayable()` now also takes the run's weather: older runs in fog are no longer valid ghosts, and every other older run still is.
+
+Tests: a cop 6 tiles down a straight street sees you on a clear day but not in fog; a compatibility table for v1–v6. 193 tests pass; tsc and eslint are clean; checked in the browser locally (London · Fog).
+**Needs human verification:** play a fog city and check that cops spot you later.

@@ -341,7 +341,7 @@ export async function getGhost(tools: ActionTools, board: unknown): Promise<Acti
     const run = await tools.get('runs', row.runId)
     if (!run.success) continue
     const d = run.data.record.data as unknown as RunRow & { inputLog?: InputLog }
-    if (d.status !== 'verified' || !Array.isArray(d.inputLog) || !isReplayable(d.engineVersion, d.inputLog)) continue
+    if (d.status !== 'verified' || !Array.isArray(d.inputLog) || !isReplayable(d.engineVersion, d.inputLog, d.weather?.condition ?? '')) continue
     return {
       success: true,
       data: { name: row.name, score: row.score, cityId: d.cityId, seed: d.seed, weather: d.weather, plan: d.plan, inputLog: d.inputLog },
