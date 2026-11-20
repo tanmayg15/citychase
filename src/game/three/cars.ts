@@ -17,6 +17,20 @@ const glassMat = new THREE.MeshPhysicalMaterial({
 const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2c8, emissiveIntensity: 3 })
 const tailMat = new THREE.MeshStandardMaterial({ color: 0x400000, emissive: 0xff1a1a, emissiveIntensity: 2.2 })
 
+/**
+ * Silhouette drawn ONLY where the car is hidden behind something (depth test
+ * reversed), so a car behind a building shows through as a coloured outline.
+ */
+export function addXray(group: THREE.Group, color: number): void {
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.75, depthWrite: false, depthFunc: THREE.GreaterDepth,
+  })
+  const shape = new THREE.Mesh(new RoundedBoxGeometry(0.86, 0.3, 0.48, 2, 0.06), mat)
+  shape.position.y = 0.18
+  shape.renderOrder = 10
+  group.add(shape)
+}
+
 export interface CarParts {
   group: THREE.Group
   /** Present on police cars: the two light-bar halves. */
@@ -68,6 +82,7 @@ export function makeGetawayCar(): CarParts {
   headlight.position.set(0.4, 0.2, 0)
   headlight.target.position.set(3, 0, 0)
   group.add(headlight, headlight.target)
+  addXray(group, 0xff8a1f)
   return { group, headlight }
 }
 
@@ -102,5 +117,6 @@ export function makePoliceCar(): CarParts {
   group.add(light)
   wheels(group)
   lights(group)
+  addXray(group, 0x8fb8ff)
   return { group, sirens: { red, blue, light } }
 }

@@ -115,7 +115,7 @@ export class CityScene {
     this.buildProps()
 
     this.player = makeGetawayCar()
-    this.player.group.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true })
+    this.player.group.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.renderOrder === 0) o.castShadow = true })
     if (this.player.headlight) this.player.headlight.intensity = this.night ? 14 : 4
     this.scene.add(this.player.group)
     for (let i = 0; i < cfg.plan.cops.length; i++) {
@@ -504,10 +504,13 @@ export class CityScene {
     // Chase camera: follows the car from behind-and-above, north stays up so
     // the arrow keys keep matching the screen.
     const { width: MW, height: MH } = this.cfg.maze
+    // Keep the car near the middle of the screen; clamp only a little at the
+    // map edges (a hard clamp pushed the car to the screen edge, where it was
+    // seen at a shallow angle behind buildings).
     const goal = new THREE.Vector3(
-      THREE.MathUtils.clamp(pp.x + 0.5, 6, MW - 6),
+      THREE.MathUtils.clamp(pp.x + 0.5, 3, MW - 3),
       0,
-      THREE.MathUtils.clamp(pp.y + 0.5, 4.5, MH - 5.5),
+      THREE.MathUtils.clamp(pp.y + 0.5, 1.5, MH - 3),
     )
     this.camTarget.lerp(goal, 1 - Math.exp(-dt * 5))
     this.camera.position.set(this.camTarget.x, 13, this.camTarget.z + 6.2)
