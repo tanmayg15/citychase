@@ -94,6 +94,8 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 - **Tests:** 13 new action tests against an in-memory `ActionTools` (72 in total, all passing): the server score ignores a client-sent `score`, a replayed request is rejected, another user's run is rejected, faster-than-real-time is rejected, 4 malformed-log cases are rejected, attempts get distinct seeds, the per-day cap holds, and the leaderboard keeps the best score only.
 - **Checked in the in-app browser (local dev server):** the practice game runs (moving and eating orbs, ghosts released), night mode works, the console has no errors, `/home` loads the empty leaderboard for anonymous users, and `/play` shows the sign-in panel. `curl` against both actions with no token or a forged token returns **401**.
 
+- After Tanmay approved: pushed to GitHub and deployed. On https://citychase.app.space, `/`, `/home`, `/play`, `/dev/mazes` and `/dev/play` return 200, `/home` loads with an empty leaderboard and no console errors, and an unauthenticated `submitRun` returns 401.
+
 ### Not verified by the agent
 - **No signed-in end-to-end run.** That needs a real login (Tanmay) or a test account (needs Tanmay's OK to create).
 - **Worker CPU time of the replay** is not measured yet; it needs the deployed build. It's logged as `[submitRun] … replayMs=` (watch with `npx deepspace logs --follow`).
