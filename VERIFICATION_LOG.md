@@ -395,3 +395,9 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 - **Cause:** the position now leads into turns (previous fix), but the yaw still followed the engine's `player.dir`, which only changes when the car leaves the tile, so the model slid sideways around corners and then snapped.
 - **Fix:** the 3D car's yaw follows its **on-screen velocity** (from the drawn position, eased), and the 2D minimap car uses the predicted next direction. Render-only.
 - **Checked:** screenshots during a right→up turn show the car facing right, then angled mid-corner, then facing up. 168 tests pass.
+
+## Junction "at vs passed" + parked-car shake (2026-11-20)
+- **Tanmay:** (1) a left/right pressed after the car visibly passed a junction still turned there; (2) the car "vibrates to and fro very fast" when it starts again.
+- **(1) Cause:** the car sits on the junction tile for 4 ticks while the engine still accepts a turn, but the previous fix drew it *leaving* the junction for all 4 ticks. **Fix:** draw it arriving for the first half and leaving for the second half, so it is at the junction centre halfway through; a side turn pressed after the centre is **held** by the client until the car has moved on (it then applies at the next road). Reversing is never held. Holding only changes *when* the key is fed to the engine, so the input log and server replay stay exact.
+- **(2) Cause (introduced by (1)):** a parked car keeps cycling its clock, and the "arriving" half was drawn every cycle, so it shook back and forth. **Fix:** only draw the arriving slide if the car really entered the tile on its last move.
+- **Tests:** drawn at the junction centre halfway; a turn before the centre is taken here; a turn after the centre is not; reversing is never held; a parked car is drawn perfectly still (171 pass). Browser: the turn at a junction is taken where pressed.

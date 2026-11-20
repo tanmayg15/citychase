@@ -12,7 +12,7 @@ import {
   CLEAR_WEATHER, Dir, LOOT_TO_OPEN_EXIT, TICK_RATE, createGame, step,
   type GameConfig, type GameState, type InputLog, type WeatherSnapshot,
 } from '../engine'
-import { Motion } from './motion'
+import { Motion, shouldHoldTurn } from './motion'
 import { getSfx, unlockOnNextGesture, type Sfx } from './sound'
 import { RADIO_TEXT } from './radio-lines'
 import { drawFrame } from './renderer'
@@ -261,7 +261,9 @@ export function GameCanvas({
         while (acc >= TICK_MS && s.status === 'playing') {
           acc -= TICK_MS
           const prevDir = s.player.dir
-          if (pending !== Dir.None) {
+          // A side turn pressed after the car has visibly passed the junction
+          // centre waits until the car moves on (it then applies at the next road).
+          if (pending !== Dir.None && !shouldHoldTurn(cfg.maze, s, pending)) {
             log.push([s.tick, pending])
             step(cfg, s, pending)
             pending = Dir.None

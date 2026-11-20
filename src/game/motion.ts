@@ -75,26 +75,37 @@ export class Motion {
   private drawnPlayer: Pos | null = null
 
   /**
-   * Where to draw the player's car. Unlike the cops (drawn sliding from their
-   * previous tile, i.e. slightly behind), the player is drawn from the tile the
-   * engine has it on TOWARD the tile it will actually enter next. So when the car
-   * looks like it is at a junction, it really is, and a turn pressed then
-   * happens at that junction instead of the next one.
+   * Where to draw the player's car. The engine keeps the car on a tile for
+   * PLAYER_PERIOD ticks and decides where it goes next when it leaves. We draw
+   * the car ARRIVING at the tile for the first half of that time and LEAVING it
+   * (toward the tile it will really enter next) for the second half, so the
+   * moment it is drawn at the centre of a junction is the middle of the window
+   * in which a turn still counts. Before the centre: the turn happens here.
+   * After the centre: see shouldHoldTurn().
    */
   player(maze: Maze, s: GameState, alpha: number): Pos {
     const p = s.player
-    const dir = predictNextDir(maze, s)
     const k = Math.min(1, (p.clock + alpha) / PLAYER_PERIOD)
     let tx = p.x, ty = p.y
-    if (dir !== Dir.None) {
-      const nx = p.x + DX[dir], ny = p.y + DY[dir]
-      if (nx >= 0 && ny >= 0 && nx < maze.width && ny < maze.height) { tx = p.x + DX[dir] * k; ty = p.y + DY[dir] * k }
+    // Only draw the "arriving" half if the car really entered this tile on its
+    // last move. A parked car (against a wall, or just started) keeps counting
+    // its clock too, and drawing it arriving every cycle made it shake.
+    const t = this.tracks[0]
+    const justArrived = !!t && t.to.x === p.x && t.to.y === p.y && (t.from.x !== t.to.x || t.from.y !== t.to.y) &&
+      s.tick - t.moveTick < PLAYER_PERIOD
+    if (k < 0.5) {
+      if (justArrived && p.dir !== Dir.None) { tx = p.x - DX[p.dir] * (0.5 - k); ty = p.y - DY[p.dir] * (0.5 - k) }
+    } else {
+      const dir = predictNextDir(maze, s)
+      if (dir !== Dir.None) {
+        const nx = p.x + DX[dir], ny = p.y + DY[dir]
+        if (nx >= 0 && ny >= 0 && nx < maze.width && ny < maze.height) { tx = p.x + DX[dir] * (k - 0.5); ty = p.y + DY[dir] * (k - 0.5) }
+      }
     }
     const d = this.drawnPlayer
-    // Small smoothing so a change of plan (new key press) eases instead of jumping;
-    // big jumps (respawn, tunnel) snap.
+    // Light smoothing so a change of plan eases instead of jumping; respawns snap.
     if (!d || Math.abs(d.x - tx) + Math.abs(d.y - ty) > 1.5) this.drawnPlayer = { x: tx, y: ty }
-    else this.drawnPlayer = { x: d.x + (tx - d.x) * 0.55, y: d.y + (ty - d.y) * 0.55 }
+    else this.drawnPlayer = { x: d.x + (tx - d.x) * 0.6, y: d.y + (ty - d.y) * 0.6 }
     return this.drawnPlayer
   }
 
@@ -104,4 +115,20 @@ export class Motion {
     if (maze) out[0] = this.player(maze, s, alpha)
     return out
   }
+}
+
+/**
+ * True if a side turn pressed now should wait until the car has moved on:
+ * the car is already drawn past the centre of this tile (second half of its
+ * time here) and the turn would otherwise still be taken HERE. Reversing and
+ * presses while stopped are never held. Holding only changes WHEN the key is
+ * fed to the engine, so the input log and server replay stay exact.
+ */
+export function shouldHoldTurn(maze: Maze, s: GameState, dir: Dir): boolean {
+  const p = s.player
+  if (p.dir === Dir.None || dir === p.dir) return false
+  const reverse = (p.dir + 1) % 4 + 1 === dir // Up<->Down, Left<->Right
+  if (reverse) return false
+  if (p.clock * 2 < PLAYER_PERIOD) return false // still before the centre: turn here
+  return canMove(maze, p.x, p.y, dir) // only matters if the turn is possible here
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CLEAR_WEATHER, DEFAULT_PLAN, Dir, PLAYER_PERIOD, createGame, parseMaze, step, weatherToModifiers } from '../engine'
 import { TEST_MAZE_ROWS } from '../engine/fixtures'
-import { Motion } from './motion'
+import { Motion, shouldHoldTurn } from './motion'
 
 describe('Motion', () => {
   it('moves the runner at a constant visual speed (no hop-and-pause)', () => {
@@ -22,40 +22,75 @@ describe('Motion', () => {
   })
 })
 
-describe('player drawn with no lag (turns happen where they look like they should)', () => {
+describe('junction timing: at the junction vs already passed it', () => {
   const cfg = { maze: parseMaze(TEST_MAZE_ROWS), seed: 1, modifiers: weatherToModifiers(CLEAR_WEATHER), plan: DEFAULT_PLAN }
 
-  it('when the engine has just arrived on a tile, the car is drawn exactly on it', () => {
-    const s = createGame(cfg)
-    s.cops = []
-    const m = new Motion(s)
-    step(cfg, s, Dir.Right)
-    while (s.player.clock !== 0 || s.player.x === 9) { step(cfg, s); m.update(s) }
-    const drawn = m.player(cfg.maze, s, 0)
-    expect(drawn.x).toBeCloseTo(s.player.x, 1)
-    expect(drawn.y).toBeCloseTo(s.player.y, 1)
-  })
-
-  it('pressing a turn while the car is drawn at a junction turns at THAT junction', () => {
-    // Drive right until the engine sits on a junction with an open street upward,
-    // then press Up while the car is drawn there.
+  /** Drive right from the start until the engine has just arrived on a junction with an open street upward. */
+  function atJunction() {
     const s = createGame(cfg)
     s.cops = []
     const m = new Motion(s)
     step(cfg, s, Dir.Right); m.update(s)
     let guard = 0
-    // Advance until the engine sits on a tile from which Up is possible (a junction).
-    while (!(s.player.clock === 0 && s.player.x !== 9 && canMoveUp(s)) && guard++ < 200) { step(cfg, s); m.update(s) }
-    const junction = { x: s.player.x, y: s.player.y }
-    // Drawn at the junction now; the player presses Up mid-way through the tile time.
-    step(cfg, s, Dir.Up); m.update(s)
-    expect(m.player(cfg.maze, s, 0.5).y).toBeLessThan(junction.y) // drawn heading up already
-    for (let i = 0; i < PLAYER_PERIOD; i++) { step(cfg, s); m.update(s) }
-    expect({ x: s.player.x, y: s.player.y }).toEqual({ x: junction.x, y: junction.y - 1 }) // turned here, not later
+    while (!(s.player.clock === 0 && s.player.x !== 9 && cfg.maze.cells[(s.player.y - 1) * cfg.maze.width + s.player.x] !== 1) && guard++ < 200) {
+      step(cfg, s); m.update(s)
+    }
+    return { s, m, junction: { x: s.player.x, y: s.player.y } }
+  }
+
+  /** The game loop's rule: feed a key to the engine unless it must be held. */
+  function tick(s: ReturnType<typeof createGame>, pending: { dir: Dir }) {
+    if (pending.dir !== Dir.None && !shouldHoldTurn(cfg.maze, s, pending.dir)) { step(cfg, s, pending.dir); pending.dir = Dir.None } else step(cfg, s)
+  }
+
+  it('the car is drawn at the junction centre halfway through its time there', () => {
+    const { s, m, junction } = atJunction()
+    const arriving = m.player(cfg.maze, s, 0)
+    expect(arriving.x).toBeCloseTo(junction.x - 0.5, 1) // still approaching
+    step(cfg, s); step(cfg, s) // clock = 2 = half of PLAYER_PERIOD
+    for (let i = 0; i < 6; i++) m.player(cfg.maze, s, 0) // let smoothing settle
+    const centre = m.player(cfg.maze, s, 0)
+    expect(centre.x).toBeCloseTo(junction.x, 1)
+    expect(centre.y).toBeCloseTo(junction.y, 1)
   })
 
-  function canMoveUp(s: ReturnType<typeof createGame>) {
-    const k = (s.player.y - 1) * cfg.maze.width + s.player.x
-    return cfg.maze.cells[k] !== 1
-  }
+  it('a turn pressed before the centre is taken at this junction', () => {
+    const { s, junction } = atJunction()
+    const pending = { dir: Dir.Up }
+    for (let i = 0; i < PLAYER_PERIOD + 1; i++) tick(s, pending)
+    expect({ x: s.player.x, y: s.player.y }).toEqual({ x: junction.x, y: junction.y - 1 })
+  })
+
+  it('a turn pressed after the car passed the centre is NOT taken here', () => {
+    const { s, junction } = atJunction()
+    step(cfg, s); step(cfg, s) // past the centre (clock = 2)
+    expect(shouldHoldTurn(cfg.maze, s, Dir.Up)).toBe(true)
+    const pending = { dir: Dir.Up }
+    for (let i = 0; i < PLAYER_PERIOD; i++) tick(s, pending)
+    expect(s.player.y).toBe(junction.y) // kept going straight
+    expect(s.player.x).toBe(junction.x + 1)
+  })
+
+  it('reversing is never held', () => {
+    const { s } = atJunction()
+    step(cfg, s); step(cfg, s)
+    expect(shouldHoldTurn(cfg.maze, s, Dir.Left)).toBe(false)
+  })
+})
+
+describe('a parked car does not shake', () => {
+  it('a car blocked by a wall is drawn still, every frame', () => {
+    const cfg = { maze: parseMaze(TEST_MAZE_ROWS), seed: 1, modifiers: weatherToModifiers(CLEAR_WEATHER), plan: DEFAULT_PLAN }
+    const s = createGame(cfg)
+    s.cops = []
+    const m = new Motion(s)
+    step(cfg, s, Dir.Down); m.update(s) // (9,12) is a wall: the car never moves
+    const xs: number[] = [], ys: number[] = []
+    for (let i = 0; i < PLAYER_PERIOD * 5; i++) {
+      for (const a of [0, 0.5]) { const p = m.player(cfg.maze, s, a); xs.push(p.x); ys.push(p.y) }
+      step(cfg, s); m.update(s)
+    }
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(0.01)
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(0.01)
+  })
 })
