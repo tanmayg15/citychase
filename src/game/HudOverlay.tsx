@@ -60,6 +60,11 @@ export function HudOverlay({ hud, city, weather, mode }: {
         <div className={`${glass} px-4 py-1.5 text-sm font-semibold ${hud?.exitOpen ? 'border-emerald-400/60 text-emerald-300' : 'text-white/80'}`}>
           {hud?.exitOpen ? '🟢 Safehouse open: get to the H' : `🔒 ${need} more loot to open the safehouse`}
         </div>
+        {hud?.radio && (
+          <div className={`${glass} max-w-md border-sky-400/40 px-4 py-1.5 text-center text-sm italic text-sky-100`} data-testid="radio-subtitle">
+            📻 “{hud.radio}”
+          </div>
+        )}
         {hud?.wanted && (
           <div className="animate-pulse rounded-xl bg-red-600/90 px-5 py-1.5 text-sm font-black tracking-[0.3em] shadow-[0_0_24px_rgba(220,38,38,0.8)]">
             WANTED

@@ -166,6 +166,48 @@ export class Sfx {
   busted(): void { [392, 330, 262].forEach((f, i) => this.tone(f, i * 0.18, 0.35, 'sawtooth', 0.12)) }
   click(): void { this.tone(660, 0, 0.05, 'square', 0.08) }
 
+  // ─── Police radio (voice clips from the server, played through a radio filter) ───
+
+  private clips = new Map<string, AudioBuffer>()
+  private radioBusyUntil = 0
+
+  /** Decode the server's voice clips (data URLs) once; missing clips are simply skipped. */
+  async loadRadio(urls: Record<string, string>): Promise<void> {
+    const ctx = this.ensure()
+    if (!ctx) return
+    for (const [id, url] of Object.entries(urls)) {
+      if (this.clips.has(id) || !url.startsWith('data:audio/')) continue
+      try {
+        const bytes = await (await fetch(url)).arrayBuffer()
+        this.clips.set(id, await ctx.decodeAudioData(bytes))
+      } catch { /* bad clip: ignore */ }
+    }
+  }
+
+  /** Play a radio line: squelch click, band-limited "walkie-talkie" voice, static tail. Returns false if skipped. */
+  radio(id: string): boolean {
+    const ctx = this.ctx
+    const clip = this.clips.get(id)
+    if (!ctx || !this.master || !clip || !this.active) return false
+    if (ctx.currentTime < this.radioBusyUntil) return false // never talk over the previous line
+    const src = ctx.createBufferSource()
+    src.buffer = clip
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 400
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200
+    const drive = ctx.createWaveShaper()
+    const curve = new Float32Array(256)
+    for (let i = 0; i < 256; i++) { const x = (i / 128) - 1; curve[i] = Math.tanh(2.2 * x) }
+    drive.curve = curve
+    const g = ctx.createGain(); g.gain.value = 0.9
+    src.connect(hp).connect(lp).connect(drive).connect(g).connect(this.master)
+    this.burst(0.06, 2500, 0.18, 'bandpass') // squelch in
+    src.start(ctx.currentTime + 0.05)
+    this.radioBusyUntil = ctx.currentTime + clip.duration + 0.6
+    const end = ctx.currentTime + 0.05 + clip.duration
+    setTimeout(() => this.burst(0.12, 3000, 0.14, 'bandpass'), (end - ctx.currentTime) * 1000) // squelch out
+    return true
+  }
+
   /** Silence the continuous sounds (engine, siren) without closing audio. */
   quiet(): void {
     if (!this.ctx) return

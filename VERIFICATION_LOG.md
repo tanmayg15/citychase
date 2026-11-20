@@ -312,3 +312,22 @@ Remove "How it works" and the sign-in note; the lobby must fit without scrolling
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Integrations: NewsAPI, ElevenLabs radio voices, email alerts (2026-11-20)
+
+### Why
+The task suggests ≥ 3 DeepSpace integrations; after dropping Claude/email the app used only OpenWeatherMap. Tanmay chose: NewsAPI ticker, email challenges, cop radio voices (TTS, a voice service, not ML we build).
+
+### Agent did
+- Read the exact specs first (`integrations info`, saved under `docs/integrations/`): `newsapi/search-everything` ($0.0234), `elevenlabs/generate-speech` (~$0.0002/char, returns an `audioUrl` data URL), `email/send` ($0.013; the sender is fixed).
+- **News ticker:** `GET /api/news` (public). Only **today's city** can trigger a refresh. Cached 1 h in `newsCache`, cap 30/day, headlines de-duplicated, cleaned and length-capped. The lobby ticker shows "<CITY> · headline", falling back to the canned ticker.
+- **Police radio voices:** 7 fixed lines (no player data), generated **once each** via ElevenLabs and cached forever in `radioCache` (at most 2 new per request, cap 20/day, only `data:audio/` URLs accepted). `GET /api/radio` (public). The client plays clips through a "walkie-talkie" filter (high/low-pass + soft clipping + squelch) on start, first spotted (≤ 1 per 8 s), smoke, safehouse open, caught and escaped, with **subtitles** in the HUD. Never talks over itself.
+- **Email alerts (opt-in):** a "🔔 #1 alerts" toggle in the lobby (`setAlerts`/`getPrefs`, `prefs` collection). When a verified run takes the #1 spot on a board, the previous #1 is emailed **only if they opted in**, never guests; cap 30/day overall and 3 per recipient; names HTML-escaped. Failures never block saving a run.
+- All three are gated by guard.ts (live mode + owner kill switch + caps + usage log), owner-billed, server-only (direct browser calls → 403, checked).
+- 9 new tests (162 total pass).
+
+### Not verified
+- **No real call made yet** for NewsAPI, ElevenLabs or email (the response shapes come from the specs). It needs the deploy plus the kill switch ON, then: the lobby ticker shows real headlines, the first game generates up to 2 radio clips per load, and `/ops` usage counts appear.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_

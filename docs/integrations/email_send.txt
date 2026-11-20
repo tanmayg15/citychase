@@ -1,0 +1,84 @@
+email/send
+  Send a transactional email from DeepSpace Apps <notifications@updates.app.space>. Any from value is ignored; use reply_to for replies. Supports HTML or plain text, cc and bcc.
+  billing: $0.013 per request
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "from": {
+      "type": "string"
+    },
+    "to": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "subject": {
+      "type": "string"
+    },
+    "html": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "reply_to": {
+      "type": "string"
+    },
+    "cc": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "bcc": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "headers": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "to",
+    "subject"
+  ]
+}
+
+Example body:
+{
+  "to": "<value>",
+  "subject": "<string>"
+}

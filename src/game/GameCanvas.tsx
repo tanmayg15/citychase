@@ -14,6 +14,7 @@ import {
 } from '../engine'
 import { Motion } from './motion'
 import { getSfx, unlockOnNextGesture, type Sfx } from './sound'
+import { RADIO_TEXT } from './radio-lines'
 import { drawFrame } from './renderer'
 import type { CityScene } from './three/CityScene'
 
@@ -44,6 +45,8 @@ export interface Hud {
   /** True while at least one cop is chasing you. */
   wanted: boolean
   heat: number
+  /** The police radio line currently being spoken, for subtitles. */
+  radio: string | null
 }
 
 /** WebGL available and the device is not obviously too weak for the 3D view. */
@@ -182,6 +185,15 @@ export function GameCanvas({
     }
 
     const sound = sfx.current
+    // Police radio: fetch the voice clips (cached on the server) and decode them.
+    let radioText: string | null = null
+    let radioUntil = 0
+    let lastSpotted = -Infinity
+    let started = false
+    fetch('/api/radio').then((r) => r.json() as Promise<{ data?: Record<string, string> }>).then((b) => sound?.loadRadio(b.data ?? {})).catch(() => {})
+    const say = (id: string, text: string, now: number) => {
+      if (sound?.radio(id)) { radioText = text; radioUntil = now + 4000 }
+    }
     const press = (d: Dir) => { pending = d }
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (uiRef.current === 'running' || uiRef.current === 'paused')) {
@@ -227,6 +239,7 @@ export function GameCanvas({
       const sec = Math.ceil(countdown / 1000)
       if (state === 'running' && countdown > 0 && sec !== lastBeep) { lastBeep = sec; sound?.countdown(false) }
       if (state === 'running' && countdown === 0 && lastBeep !== 0) { lastBeep = 0; sound?.countdown(true) }
+      if (state === 'running' && countdown === 0 && !started) { started = true; say('start', RADIO_TEXT.start, now) }
       if (state === 'running' && countdown === 0 && !ended) {
         acc += Math.min(now - last, MAX_FRAME_MS)
         while (acc >= TICK_MS && s.status === 'playing') {
@@ -243,11 +256,16 @@ export function GameCanvas({
           if (prevDir !== Dir.None && s.player.dir !== prevDir) sound?.screech(cfg.modifiers.slipTiles > 0)
           for (const e of s.events) {
             if (e.type === 'loot') sound?.loot()
-            else if (e.type === 'exitOpen') sound?.exitOpen()
-            else if (e.type === 'smoke') sound?.smoke()
-            else if (e.type === 'spotted') sound?.spotted()
-            else if (e.type === 'caught') sound?.caught()
-            else if (e.type === 'end') (e.status === 'escaped' ? sound?.escape() : sound?.busted())
+            else if (e.type === 'exitOpen') { sound?.exitOpen(); say('safehouse', RADIO_TEXT.safehouse, now) }
+            else if (e.type === 'smoke') { sound?.smoke(); if (e.blinded > 0) say('smoke', RADIO_TEXT.smoke, now) }
+            else if (e.type === 'spotted') {
+              sound?.spotted()
+              if (now - lastSpotted > 8000) { lastSpotted = now; say('spotted', RADIO_TEXT.spotted, now) }
+            }
+            else if (e.type === 'caught') { sound?.caught(); say('caught', RADIO_TEXT.caught, now) }
+            else if (e.type === 'end') {
+              if (e.status === 'escaped') { sound?.escape(); say('escaped', RADIO_TEXT.escaped, now) } else sound?.busted()
+            }
           }
         }
       }
@@ -292,6 +310,7 @@ export function GameCanvas({
         exitOpen: s.exit.open,
         wanted: s.cops.some((c) => c.status === 'chase'),
         heat: s.heat,
+        radio: now < radioUntil ? radioText : null,
       })
       if (s.status !== 'playing' && !ended) {
         ended = true

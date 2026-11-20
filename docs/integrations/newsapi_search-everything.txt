@@ -1,0 +1,91 @@
+newsapi/search-everything
+  Search news articles by keyword with date, language, domain, and sort filters, with ready-made headline strings.
+  billing: $0.0234 per request
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "q": {
+      "type": "string"
+    },
+    "query": {
+      "type": "string"
+    },
+    "sources": {
+      "type": "string"
+    },
+    "domains": {
+      "type": "string"
+    },
+    "excludeDomains": {
+      "type": "string"
+    },
+    "from": {
+      "type": "string"
+    },
+    "to": {
+      "type": "string"
+    },
+    "language": {
+      "default": "en",
+      "type": "string"
+    },
+    "sortBy": {
+      "default": "publishedAt",
+      "type": "string"
+    },
+    "pageSize": {
+      "default": 20,
+      "type": "number",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "page": {
+      "default": 1,
+      "type": "number",
+      "minimum": 1
+    }
+  }
+}
+
+Example body:
+{
+  "language": "en",
+  "sortBy": "publishedAt",
+  "pageSize": 20,
+  "page": 1
+}
+
+Output schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "headlines": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "articles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {}
+      }
+    },
+    "totalResults": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "headlines",
+    "articles"
+  ],
+  "additionalProperties": false
+}

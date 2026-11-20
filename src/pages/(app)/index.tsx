@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthOverlay, signOut, useAuth, useAuthUser, useQuery } from 'deepspace'
 import { CITY_MAZES, getCity } from '@/cities'
-import { claimGuestIfAny, loadGuest } from '@/game/api'
+import { callAction, claimGuestIfAny, loadGuest } from '@/game/api'
 import { AttractScene } from '@/game/AttractScene'
 import { dailyFor, utcDate, weatherLabel } from '@/game/daily'
 import { Leaderboard } from '@/game/Leaderboard'
@@ -49,6 +49,25 @@ export default function Lobby() {
   // Back from sign-in: move this browser's guest scores to the account.
   useEffect(() => { if (isSignedIn) void claimGuestIfAny() }, [isSignedIn])
 
+  // Real headlines about today's city (NewsAPI, cached on the server); falls back to the canned ticker.
+  const [news, setNews] = useState<string[]>([])
+  useEffect(() => {
+    fetch('/api/news').then((r) => r.json() as Promise<{ data?: { headlines?: string[] } }>)
+      .then((b) => setNews(b.data?.headlines ?? [])).catch(() => {})
+  }, [])
+
+  // Opt-in email alert when someone takes your #1 spot.
+  const [alerts, setAlerts] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!isSignedIn) return
+    callAction<{ emailAlerts: boolean }>('getPrefs').then((p) => setAlerts(p.emailAlerts)).catch(() => {})
+  }, [isSignedIn])
+  const toggleAlerts = () => {
+    const next = !alerts
+    setAlerts(next)
+    callAction('setAlerts', { enabled: next }).catch(() => setAlerts(!next))
+  }
+
   const go = (url: string) => {
     getSfx()?.resume() // unlock audio inside the click
     navigate(url)
@@ -62,9 +81,18 @@ export default function Lobby() {
       <header className="flex shrink-0 items-center justify-between px-5 py-3 sm:px-8">
         <span className="text-2xl font-black tracking-tight" style={{ textShadow: '0 0 18px #ff8a1f' }}>CITY CHASE</span>
         {isSignedIn ? (
-          <button onClick={() => void signOut()} className="rounded-full bg-white/10 px-3 py-1.5 text-sm backdrop-blur hover:bg-white/20" title="Sign out">
-            {user?.firstName ?? 'Signed in'} · sign out
-          </button>
+          <div className="flex items-center gap-2">
+            {alerts !== null && (
+              <button onClick={toggleAlerts} data-testid="alerts-toggle"
+                className={`rounded-full px-3 py-1.5 text-sm backdrop-blur ${alerts ? 'bg-amber-400/25 text-amber-100' : 'bg-white/10 text-white/70'}`}
+                title="Email me if someone takes my #1 spot">
+                {alerts ? '🔔 #1 alerts on' : '🔕 #1 alerts off'}
+              </button>
+            )}
+            <button onClick={() => void signOut()} className="rounded-full bg-white/10 px-3 py-1.5 text-sm backdrop-blur hover:bg-white/20" title="Sign out">
+              {user?.firstName ?? 'Signed in'} · sign out
+            </button>
+          </div>
         ) : (
           <button onClick={() => setSignIn(true)} className="rounded-full bg-white/10 px-3 py-1.5 text-sm backdrop-blur hover:bg-white/20" data-testid="lobby-sign-in">
             {guestName ? `${guestName} · sign in` : 'Sign in'}
@@ -156,9 +184,12 @@ export default function Lobby() {
 
       <div className="absolute inset-x-0 bottom-0 overflow-hidden border-t border-red-500/40 bg-black/80 py-2 text-sm backdrop-blur">
         <div className="flex w-max animate-[ticker_40s_linear_infinite] gap-12 whitespace-nowrap pl-4">
-          {[...TICKER, ...TICKER].map((t, i) => (
-            <span key={i}><span className="mr-2 rounded bg-red-600 px-1.5 py-0.5 text-xs font-bold">LIVE</span>{t}</span>
-          ))}
+          {(() => {
+            const items = news.length ? news.map((h) => ({ tag: dailyCity.city.toUpperCase(), text: h })) : TICKER.map((t) => ({ tag: 'LIVE', text: t }))
+            return [...items, ...items].map((t, i) => (
+              <span key={i}><span className="mr-2 rounded bg-red-600 px-1.5 py-0.5 text-xs font-bold">{t.tag}</span>{t.text}</span>
+            ))
+          })()}
         </div>
       </div>
 

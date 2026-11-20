@@ -37,6 +37,8 @@ import {
 import type { ActionResult, ActionTools, VerifyResult } from 'deepspace/worker'
 import { actions } from '../actions/index.js'
 import { guestStart, guestSubmit } from '../actions/runs.js'
+import { getNews, getRadio } from '../actions/media.js'
+import { dailyFor, utcDate } from '../game/daily.js'
 import { integrations } from '../integrations.js'
 import type { AppContext, Env } from '../../worker.js'
 
@@ -51,6 +53,19 @@ export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: Resolve
     const tools = createActionTools(c.env, 'guest', '')
     const result = await guestStart(c.env, tools, params as Record<string, unknown>)
     return c.json(result as unknown as Record<string, unknown>, result.success ? 200 : 400)
+  })
+  // Public read of the lobby news ticker. Only today's city can trigger a
+  // (cached, capped, kill-switched) refresh, so visitors can't fan out calls.
+  app.get('/api/news', async (c) => {
+    const tools = createActionTools(c.env, 'guest', '')
+    const cityId = dailyFor(utcDate()).cityId
+    const headlines = await getNews(c.env, tools, cityId, 'public')
+    return c.json({ success: true, data: { cityId, headlines } })
+  })
+  // Public read of the police radio clips (generated once each, then cached).
+  app.get('/api/radio', async (c) => {
+    const tools = createActionTools(c.env, 'guest', '')
+    return c.json({ success: true, data: await getRadio(c.env, tools, 'public') })
   })
   // Guest submit: verified exactly like a signed-in run, stored under the guest
   // identity. The IP is only used (as a keyed hash) for the daily abuse cap.

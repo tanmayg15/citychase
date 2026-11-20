@@ -104,3 +104,51 @@ export const usageSchema: CollectionSchema = {
     admin: { read: true, ...SERVER_ONLY },
   },
 }
+
+/** Latest headlines per city (recordId = cityId), shared by everyone for an hour. */
+export const newsCacheSchema: CollectionSchema = {
+  name: 'newsCache',
+  columns: [
+    { name: 'cityId', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'headlines', storage: 'text', interpretation: { kind: 'json' }, required: true },
+    { name: 'fetchedAtMs', storage: 'number', interpretation: 'plain', required: true },
+  ],
+  permissions: {
+    '*': { read: true, ...SERVER_ONLY },
+    viewer: { read: true, ...SERVER_ONLY },
+    member: { read: true, ...SERVER_ONLY },
+    admin: { read: true, ...SERVER_ONLY },
+  },
+}
+
+/** Police radio voice clips (recordId = line id), generated once via TTS. */
+export const radioCacheSchema: CollectionSchema = {
+  name: 'radioCache',
+  columns: [
+    { name: 'lineId', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'text', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'audioUrl', storage: 'text', interpretation: 'plain', required: true },
+  ],
+  permissions: {
+    '*': { read: true, ...SERVER_ONLY },
+    viewer: { read: true, ...SERVER_ONLY },
+    member: { read: true, ...SERVER_ONLY },
+    admin: { read: true, ...SERVER_ONLY },
+  },
+}
+
+/** Per-user preferences (recordId = userId). Written only through the setAlerts action. */
+export const prefsSchema: CollectionSchema = {
+  name: 'prefs',
+  columns: [
+    { name: 'userId', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'emailAlerts', storage: 'number', interpretation: { kind: 'boolean' } },
+  ],
+  ownerField: 'userId',
+  permissions: {
+    '*': { read: false, ...SERVER_ONLY },
+    viewer: { read: false, ...SERVER_ONLY },
+    member: { read: 'own', ...SERVER_ONLY },
+    admin: { read: true, ...SERVER_ONLY },
+  },
+}

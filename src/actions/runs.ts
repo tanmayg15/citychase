@@ -24,6 +24,7 @@ import { isPreset, presetWeather, type WeatherPreset, type WeatherRecord } from 
 import {
   hashIp, newGuest, newTicketId, signTicket, verifyGuest, verifyTicket, type GuestIdentity, type RunTicket,
 } from '../server/tickets'
+import { alertKnockedOff } from './media'
 import { cachedWeather, resolveWeather } from './weather'
 
 export const MAX_RUNS_PER_DAY = 40
@@ -117,8 +118,10 @@ export async function setupRun(
 }
 
 /** Replay, run the real-time check, store the verified run, and update the board. */
+type AlertEnv = Partial<Pick<Env, 'INTEGRATIONS_MODE' | 'APP_NAME'>>
+
 async function verifyAndRecord(
-  tools: ActionTools, userId: string, runId: string, run: Omit<RunRow, 'status' | 'userId'>,
+  env: AlertEnv, tools: ActionTools, userId: string, runId: string, run: Omit<RunRow, 'status' | 'userId'>,
   inputLog: unknown, existing: boolean, nameOverride?: string,
 ): Promise<ActionResult<Record<string, unknown>>> {
   const reject = async (reason: string) => {
@@ -147,6 +150,10 @@ async function verifyAndRecord(
     : await tools.create('runs', { ...run, userId, ...result } as unknown as Record<string, unknown>, runId)
   if (!saved.success) return saved
 
+  // Who is #1 on this board right now (for the "you lost #1" email alert)?
+  const top = await tools.query('leaderboard', { where: { board: run.board }, orderBy: 'score', orderDir: 'desc', limit: 1 })
+  const leader = top.success ? (top.data.records[0]?.data as unknown as { userId: string; score: number } | undefined) : undefined
+
   // Best score per user per board.
   const lbId = `${run.board}:${userId}`
   const prev = await tools.get('leaderboard', lbId)
@@ -157,6 +164,13 @@ async function verifyAndRecord(
       name: nameOverride ?? await displayName(tools, userId), score: end.score, runId, guest: userId.startsWith('guest_'),
     }, lbId)
     if (!lb.success) return lb
+    if (leader && leader.userId !== userId && end.score > leader.score) {
+      await alertKnockedOff(env, tools, {
+        board: run.board, cityId: run.cityId, prevUserId: leader.userId, prevScore: leader.score,
+        newName: nameOverride ?? await displayName(tools, userId), newScore: end.score,
+        appUrl: `https://${env.APP_NAME ?? 'citychase'}.app.space/`,
+      })
+    }
   }
   return {
     success: true,
@@ -186,7 +200,7 @@ export const startRun: ActionHandler<Env> = async ({ userId, params, tools, env 
   return { success: true, data: { runId: created.data.recordId, ...setup } }
 }
 
-export const submitRun: ActionHandler<Env> = async ({ userId, params, tools }) => {
+export const submitRun: ActionHandler<Env> = async ({ userId, params, tools, env }) => {
   const runId = params.runId
   if (typeof runId !== 'string' || runId.length > 100) return fail('runId required')
   const got = await tools.get('runs', runId)
@@ -199,7 +213,7 @@ export const submitRun: ActionHandler<Env> = async ({ userId, params, tools }) =
     await tools.update('runs', runId, { status: 'rejected', rejectReason: 'run expired' })
     return fail('Run rejected: run expired')
   }
-  return verifyAndRecord(tools, userId, runId, { ...run, board: run.board ?? `daily:${run.date}` }, params.inputLog, true)
+  return verifyAndRecord(env, tools, userId, runId, { ...run, board: run.board ?? `daily:${run.date}` }, params.inputLog, true)
 }
 
 /** Guest start: the same setup as startRun, returned as a signed ticket. No auth, no storage, no paid calls. */
@@ -229,7 +243,7 @@ export const MAX_GUEST_SUBMITS_PER_IP_PER_DAY = 60
  * generated, and each IP (stored only as a keyed hash) gets a daily cap.
  */
 export async function guestSubmit(
-  env: Pick<Env, 'RUN_TICKET_SECRET'>, tools: ActionTools, params: Record<string, unknown>, ip: string,
+  env: Pick<Env, 'RUN_TICKET_SECRET'> & AlertEnv, tools: ActionTools, params: Record<string, unknown>, ip: string,
 ) {
   if (!env.RUN_TICKET_SECRET) return fail('Guest play is not configured')
   const guest = await verifyGuest(env.RUN_TICKET_SECRET, params.guestId, params.guestToken)
@@ -248,7 +262,7 @@ export async function guestSubmit(
   await tools.create('usage', { date, kind: 'guest-submit', scope: ipKey.split(':').pop()!, count: count + 1 }, ipKey)
 
   const { v: _v, id: _id, ...run } = t
-  const res = await verifyAndRecord(tools, `guest_${guest.guestId}`, runId, run, params.inputLog, false, guest.guestName)
+  const res = await verifyAndRecord(env, tools, `guest_${guest.guestId}`, runId, run, params.inputLog, false, guest.guestName)
   return res.success ? { success: true as const, data: { ...res.data, guestName: guest.guestName } } : res
 }
 
@@ -287,5 +301,5 @@ export const claimRun: ActionHandler<Env> = async ({ userId, params, tools, env 
   const existing = await tools.get('runs', runId)
   if (existing.success) return fail('Run already submitted')
   const { v: _v, id: _id, ...run } = t
-  return verifyAndRecord(tools, userId, runId, run, params.inputLog, false)
+  return verifyAndRecord(env, tools, userId, runId, run, params.inputLog, false)
 }
