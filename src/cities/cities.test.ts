@@ -35,7 +35,7 @@ describe('city mazes', () => {
       expect(reachable(maze)).toBe(open)
     })
 
-    it('has 4 power cores, enough orbs, and ghost spawns', () => {
+    it('has 4 smoke-bomb spots, enough streets, and a police garage', () => {
       expect(maze.cells.filter((c) => c === 3)).toHaveLength(4)
       expect(maze.cells.filter((c) => c === 2).length).toBeGreaterThan(120)
       expect(maze.ghostSpawns.length).toBeGreaterThanOrEqual(3)
@@ -59,7 +59,7 @@ describe('city mazes', () => {
       const log: InputLog = []
       let rng = 9
       for (let t = 0; t < 2000; t += 6) { const [d, n] = rngInt(rng, 4); rng = n; log.push([t, (d + 1) as Dir]) }
-      expect(createGame(cfg).pelletsLeft).toBeGreaterThan(0)
+      expect(createGame(cfg).loot.length).toBeGreaterThanOrEqual(8)
       expect(replay(cfg, log).status).not.toBe('playing')
     })
   })
