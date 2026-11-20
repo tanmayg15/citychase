@@ -24,6 +24,9 @@ export function fakeTools(db: Db, opts: FakeOpts = {}): ActionTools {
       coll(c).set(id, { ...row, ...structuredClone(patch) })
       return { success: true, data: { recordId: id } }
     },
+    async remove(c: string, id: string) {
+      return coll(c).delete(id) ? { success: true, data: { recordId: id } } : { success: false, error: 'not found' }
+    },
     async get(c: string, id: string) {
       const row = coll(c).get(id)
       return row ? { success: true, data: { record: { recordId: id, data: structuredClone(row) } } } : { success: false, error: 'not found' }

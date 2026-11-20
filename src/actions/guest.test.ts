@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Dir, MAX_TICKS, rngInt, type InputLog } from '../engine'
 import { signTicket, verifyTicket } from '../server/tickets'
-import { claimRun, guestStart, startRun, MAX_TICKET_AGE_MS } from './runs'
+import { claimGuest, claimRun, guestStart, guestSubmit, startRun, MAX_GUEST_SUBMITS_PER_IP_PER_DAY, MAX_TICKET_AGE_MS } from './runs'
 import { fakeTools, type Db } from './test-tools'
 
 const env = { RUN_TICKET_SECRET: 'test-secret-0123456789abcdef', INTEGRATIONS_MODE: 'live' }
@@ -93,5 +93,60 @@ describe('free play setup', () => {
   it('signed-in free play works too', async () => {
     const r = await startRun({ userId: 'alice', params: { mode: 'free', cityId: 'paris-marais', weather: 'night' }, tools: tools(), env: env as never, callerJwt: 'x' })
     expect(r.success && r.data).toMatchObject({ board: 'free:paris-marais:night' })
+  })
+})
+
+describe('guest leaderboard', () => {
+  async function guestRun(params: Record<string, unknown> = {}) {
+    const g = await start(params)
+    return { ...g, ticket: await aged(g.ticket) }
+  }
+
+  it('a guest run lands on the board under a generated guest name', async () => {
+    const g = await guestRun()
+    const r = await guestSubmit(env, tools(), { ticket: g.ticket, inputLog: log(), ...g.guest }, '1.2.3.4')
+    expect(r.success).toBe(true)
+    const row = db.get('leaderboard')!.get(`${g.board}:guest_${g.guest.guestId}`)!
+    expect(row).toMatchObject({ name: g.guest.guestName, guest: true })
+    expect(g.guest.guestName).toMatch(/^Guest \d{4}$/)
+  })
+
+  it('reuses a genuine guest identity and rejects a forged one', async () => {
+    const first = await start()
+    const again = await start({ guestId: first.guest.guestId, guestToken: first.guest.guestToken })
+    expect(again.guest.guestId).toBe(first.guest.guestId)
+    const forged = await start({ guestId: first.guest.guestId, guestToken: 'f'.repeat(32) })
+    expect(forged.guest.guestId).not.toBe(first.guest.guestId)
+    const g = await guestRun()
+    const r = await guestSubmit(env, tools(), { ticket: g.ticket, inputLog: log(), guestId: g.guest.guestId, guestToken: '0'.repeat(32) }, 'x')
+    expect(r).toEqual({ success: false, error: 'Invalid guest identity' })
+  })
+
+  it('caps guest submissions per IP per day', async () => {
+    const date = new Date().toISOString().slice(0, 10)
+    const g = await guestRun()
+    // Pre-fill the counter for this IP to the cap.
+    const { hashIp } = await import('../server/tickets')
+    const key = `${date}:guest-submit:${await hashIp(env.RUN_TICKET_SECRET, '9.9.9.9')}`
+    db.set('usage', new Map([[key, { count: MAX_GUEST_SUBMITS_PER_IP_PER_DAY }]]))
+    const r = await guestSubmit(env, tools(), { ticket: g.ticket, inputLog: log(), ...g.guest }, '9.9.9.9')
+    expect(r.success).toBe(false)
+  })
+
+  it('signing in moves guest scores to the account, keeping the best per board', async () => {
+    const g = await guestRun()
+    await guestSubmit(env, tools(), { ticket: g.ticket, inputLog: log(), ...g.guest }, 'ip')
+    const guestRow = db.get('leaderboard')!.get(`${g.board}:guest_${g.guest.guestId}`)!
+    const r = await claimGuest({ userId: 'alice', params: { ...g.guest }, tools: tools(), env: env as never, callerJwt: 'x' })
+    expect(r).toMatchObject({ success: true, data: { moved: 1 } })
+    expect(db.get('leaderboard')!.get(`${g.board}:guest_${g.guest.guestId}`)).toBeUndefined()
+    expect(db.get('leaderboard')!.get(`${g.board}:alice`)).toMatchObject({ score: guestRow.score, userId: 'alice', guest: false })
+    const run = db.get('runs')!.get(guestRow.runId as string)!
+    expect(run.userId).toBe('alice')
+  })
+
+  it('claiming with a forged identity does nothing', async () => {
+    const r = await claimGuest({ userId: 'mallory', params: { guestId: 'abc', guestToken: 'f'.repeat(32) }, tools: tools(), env: env as never, callerJwt: 'x' })
+    expect(r.success).toBe(false)
   })
 })

@@ -67,3 +67,44 @@ export async function verifyTicket(secret: string, token: unknown): Promise<RunT
 export function newTicketId(): string {
   return b64url(crypto.getRandomValues(new Uint8Array(12)))
 }
+
+// ─── Guest identities ──────────────────────────────────────────────────────
+// A guest gets a random id plus an HMAC token proving the server issued it.
+// Guest scores are stored under userId `guest_<id>`; signing in later moves
+// them to the real account (claimGuest). Names are generated, never typed,
+// so nobody can put offensive text on the leaderboard.
+
+export interface GuestIdentity {
+  guestId: string
+  guestToken: string
+  guestName: string
+}
+
+async function hmacHex(secret: string, text: string): Promise<string> {
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', await key(secret), enc.encode(text)))
+  return Array.from(sig.slice(0, 16), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+export function guestNameFor(guestId: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < guestId.length; i++) { h ^= guestId.charCodeAt(i); h = Math.imul(h, 0x01000193) }
+  return `Guest ${1000 + ((h >>> 0) % 9000)}`
+}
+
+export async function newGuest(secret: string): Promise<GuestIdentity> {
+  const guestId = newTicketId()
+  return { guestId, guestToken: await hmacHex(secret, `guest:${guestId}`), guestName: guestNameFor(guestId) }
+}
+
+/** Constant-time compare of the presented token against the expected one. */
+export async function verifyGuest(secret: string, guestId: unknown, guestToken: unknown): Promise<GuestIdentity | null> {
+  if (typeof guestId !== 'string' || typeof guestToken !== 'string' || guestId.length > 40 || guestToken.length !== 32) return null
+  const expected = await hmacHex(secret, `guest:${guestId}`)
+  let diff = 0
+  for (let i = 0; i < 32; i++) diff |= expected.charCodeAt(i) ^ guestToken.charCodeAt(i)
+  return diff === 0 ? { guestId, guestToken, guestName: guestNameFor(guestId) } : null
+}
+
+export async function hashIp(secret: string, ip: string): Promise<string> {
+  return (await hmacHex(secret, `ip:${ip}`)).slice(0, 16)
+}

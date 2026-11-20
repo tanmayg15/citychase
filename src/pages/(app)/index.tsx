@@ -1,15 +1,15 @@
 /**
- * The lobby: the one home page. A live 3D city (bot-played demo) behind the
- * menu; Today's heist, Free Play (any city, any weather), leaderboards and
- * sign-in. Playing never requires sign-in.
+ * The lobby: the one home page, fitted to a single screen (no scrolling on
+ * desktop). A live 3D city (bot-played demo) behind: Today's heist, Free Play
+ * (any city, any weather) and the leaderboard. Playing never requires sign-in.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { AuthOverlay, signOut, useAuth, useAuthUser, useQuery } from 'deepspace'
 import { CITY_MAZES, getCity } from '@/cities'
+import { claimGuestIfAny, loadGuest } from '@/game/api'
 import { AttractScene } from '@/game/AttractScene'
-import { loadPending } from '@/game/api'
-import { dailyFor, utcDate, weatherEmoji, weatherLabel } from '@/game/daily'
+import { dailyFor, utcDate, weatherLabel } from '@/game/daily'
 import { Leaderboard } from '@/game/Leaderboard'
 import { getSfx } from '@/game/sound'
 import { RuleBadges } from '@/game/WeatherInfo'
@@ -27,6 +27,8 @@ const TICKER = [
   'Safehouse locations change daily, say anonymous sources',
 ]
 
+const panel = 'rounded-2xl border border-white/10 bg-black/50 backdrop-blur-md'
+
 export default function Lobby() {
   const navigate = useNavigate()
   const { isSignedIn } = useAuth()
@@ -37,102 +39,86 @@ export default function Lobby() {
   const [cityId, setCityId] = useState(CITY_MAZES[0].id)
   const [weather, setWeather] = useState<WeatherPreset>('live')
   const [board, setBoard] = useState<'daily' | 'free'>('daily')
+  const [guestName, setGuestName] = useState<string | null>(null)
+  useEffect(() => setGuestName(loadGuest()?.guestName ?? null), [])
 
   const { records } = useQuery<{ cityId: string; weather: WeatherRecord }>('weatherCache', { where: { cityId: daily.cityId } })
   const dailyWeather = records[0]?.data.weather
   const bgWeather = useMemo(() => dailyWeather, [dailyWeather?.fetchedAtMs])
 
-  // Back from Google/GitHub sign-in with a guest run waiting: finish saving it.
-  const [pendingScore, setPendingScore] = useState<number | null>(null)
-  useEffect(() => {
-    const p = loadPending()
-    if (!p) return
-    if (isSignedIn) navigate('/play', { replace: true })
-    else setPendingScore(p.localScore)
-  }, [isSignedIn, navigate])
+  // Back from sign-in: move this browser's guest scores to the account.
+  useEffect(() => { if (isSignedIn) void claimGuestIfAny() }, [isSignedIn])
 
   const go = (url: string) => {
     getSfx()?.resume() // unlock audio inside the click
     navigate(url)
   }
+  const pick = getCity(cityId)!
 
   return (
-    <div className="relative isolate min-h-screen overflow-x-hidden text-[#ece6ff]" data-testid="lobby">
+    <div className="relative isolate flex h-screen flex-col overflow-hidden text-[#ece6ff]" data-testid="lobby">
       <AttractScene cityId={daily.cityId} weather={bgWeather} />
 
-      <header className="flex items-center justify-between px-5 py-4 sm:px-8">
-        <div className="flex items-baseline gap-3">
-          <span className="text-2xl font-black tracking-tight" style={{ textShadow: '0 0 18px #ff8a1f' }}>CITY CHASE</span>
-          <span className="hidden text-xs uppercase tracking-[0.3em] text-white/50 sm:inline">real streets · live weather · real chases</span>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <Link to="/about" className="text-white/60 hover:text-white">How it works</Link>
-          {isSignedIn ? (
-            <button onClick={() => void signOut()} className="rounded-full bg-white/10 px-3 py-1.5 backdrop-blur hover:bg-white/20" title="Sign out">
-              {user?.firstName ?? 'Signed in'} · sign out
-            </button>
-          ) : (
-            <button onClick={() => setSignIn(true)} className="rounded-full bg-white/10 px-3 py-1.5 backdrop-blur hover:bg-white/20" data-testid="lobby-sign-in">
-              Sign in
-            </button>
-          )}
-        </div>
+      <header className="flex shrink-0 items-center justify-between px-5 py-3 sm:px-8">
+        <span className="text-2xl font-black tracking-tight" style={{ textShadow: '0 0 18px #ff8a1f' }}>CITY CHASE</span>
+        {isSignedIn ? (
+          <button onClick={() => void signOut()} className="rounded-full bg-white/10 px-3 py-1.5 text-sm backdrop-blur hover:bg-white/20" title="Sign out">
+            {user?.firstName ?? 'Signed in'} · sign out
+          </button>
+        ) : (
+          <button onClick={() => setSignIn(true)} className="rounded-full bg-white/10 px-3 py-1.5 text-sm backdrop-blur hover:bg-white/20" data-testid="lobby-sign-in">
+            {guestName ? `${guestName} · sign in` : 'Sign in'}
+          </button>
+        )}
       </header>
 
-      {pendingScore !== null && (
-        <div className="mx-5 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-3 backdrop-blur sm:mx-8" data-testid="pending-banner">
-          <span>Your last run ({pendingScore.toLocaleString('en-US')} pts) isn't saved yet.</span>
-          <button onClick={() => navigate('/play')} className="rounded-lg bg-cyan-400 px-4 py-1.5 font-bold text-black">Save it</button>
-        </div>
-      )}
-
-      <main className="grid gap-5 px-5 pb-24 sm:px-8 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="space-y-5">
+      <main className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 pb-14 sm:px-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
+        <div className="flex min-h-0 flex-col gap-4">
           {/* Today's heist */}
-          <section className="max-w-xl rounded-2xl border border-orange-400/30 bg-black/45 p-6 backdrop-blur-md">
-            <p className="text-xs uppercase tracking-[0.3em] text-orange-300">Today's heist · same city for everyone</p>
-            <h1 className="mt-2 text-4xl font-black leading-tight sm:text-5xl" style={{ textShadow: '0 0 24px rgba(255,138,31,0.6)' }}>
-              {dailyCity.name}, {dailyCity.city}
-            </h1>
-            <p className="mt-2 text-sm text-white/70">
-              Grab the loot, reach the safehouse, stay out of the headlights. Real streets from OpenStreetMap; the city's live weather changes the rules.
-            </p>
-            {dailyWeather && (
-              <div className="mt-3">
-                <p className="text-sm text-white/80">{weatherLabel(dailyCity.city, dailyCity.timezone, dailyWeather)}</p>
-                <RuleBadges weather={dailyWeather} />
+          <section className="shrink-0 rounded-2xl border border-orange-400/30 bg-black/50 p-5 backdrop-blur-md">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.3em] text-orange-300">Today's heist · same city for everyone</p>
+                <h1 className="mt-1 text-3xl font-black leading-tight sm:text-4xl" style={{ textShadow: '0 0 24px rgba(255,138,31,0.6)' }}>
+                  {dailyCity.name}, {dailyCity.city}
+                </h1>
+                {dailyWeather && (
+                  <div className="mt-1">
+                    <p className="text-sm text-white/75">{weatherLabel(dailyCity.city, dailyCity.timezone, dailyWeather).replace(' (mock)', '')}</p>
+                    <RuleBadges weather={dailyWeather} />
+                  </div>
+                )}
               </div>
-            )}
-            <button
-              onClick={() => go('/play')}
-              data-testid="play-daily"
-              className="mt-5 rounded-xl bg-orange-500 px-8 py-4 text-lg font-black text-black shadow-[0_0_32px_rgba(255,138,31,0.7)] transition hover:scale-[1.02] hover:bg-orange-400"
-            >
-              ▶ PLAY TODAY'S HEIST
-            </button>
-            <p className="mt-2 text-xs text-white/50">No sign-in needed to play. Sign in after a run to save your score.</p>
+              <button
+                onClick={() => go('/play')}
+                data-testid="play-daily"
+                className="rounded-xl bg-orange-500 px-7 py-3.5 text-lg font-black text-black shadow-[0_0_32px_rgba(255,138,31,0.7)] transition hover:scale-[1.03] hover:bg-orange-400"
+              >
+                ▶ PLAY TODAY'S HEIST
+              </button>
+            </div>
           </section>
 
           {/* Free play */}
-          <section className="max-w-3xl rounded-2xl border border-cyan-400/25 bg-black/45 p-6 backdrop-blur-md" data-testid="free-play">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-xl font-bold">Free play</h2>
-              <p className="text-xs text-white/50">{CITY_MAZES.length} cities · pick any weather</p>
+          <section className={`${panel} flex flex-col border-cyan-400/25 p-5`} data-testid="free-play">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-lg font-bold">Free play</h2>
+              <p className="text-xs text-white/50">{CITY_MAZES.length} real cities · any weather</p>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+            <div className="mt-3 grid grid-cols-3 gap-1.5 sm:grid-cols-4 xl:grid-cols-5">
               {CITY_MAZES.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => setCityId(c.id)}
                   data-testid={`city-${c.id}`}
-                  className={`rounded-lg border px-3 py-2 text-left transition ${cityId === c.id ? 'border-cyan-300 bg-cyan-400/20 shadow-[0_0_14px_rgba(55,245,255,0.4)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                  title={`${c.name}, ${c.city}`}
+                  className={`truncate rounded-lg border px-2.5 py-1.5 text-left text-sm transition ${cityId === c.id ? 'border-cyan-300 bg-cyan-400/20 shadow-[0_0_14px_rgba(55,245,255,0.4)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
                 >
-                  <span className="block text-sm font-semibold">{c.city}</span>
-                  <span className="block text-xs text-white/50">{c.name}</span>
+                  <span className="font-semibold">{c.city}</span>
                 </button>
               ))}
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {WEATHER_PRESETS.map((w) => (
                 <button
                   key={w}
@@ -143,31 +129,32 @@ export default function Lobby() {
                   {WEATHER_LABEL[w]}
                 </button>
               ))}
+              <button
+                onClick={() => go(`/play?mode=free&city=${encodeURIComponent(cityId)}&weather=${weather}`)}
+                data-testid="play-free"
+                className="ml-auto rounded-xl bg-cyan-400 px-5 py-2.5 font-bold text-black shadow-[0_0_24px_rgba(55,245,255,0.6)] transition hover:scale-[1.03] hover:bg-cyan-300"
+              >
+                ▶ Drive {pick.city}: {pick.name}
+              </button>
             </div>
-            <button
-              onClick={() => go(`/play?mode=free&city=${encodeURIComponent(cityId)}&weather=${weather}`)}
-              data-testid="play-free"
-              className="mt-5 rounded-xl bg-cyan-400 px-6 py-3 font-bold text-black shadow-[0_0_24px_rgba(55,245,255,0.6)] transition hover:scale-[1.02] hover:bg-cyan-300"
-            >
-              ▶ Drive {getCity(cityId)?.city} · {WEATHER_LABEL[weather]}
-            </button>
           </section>
         </div>
 
-        {/* Leaderboards */}
-        <aside className="h-fit rounded-2xl border border-white/10 bg-black/50 p-5 backdrop-blur-md">
+        {/* Leaderboard */}
+        <aside className={`${panel} flex h-fit max-h-full min-h-0 flex-col p-5`}>
           <div className="mb-3 flex gap-2 text-sm">
             <button onClick={() => setBoard('daily')} className={`rounded-full px-3 py-1 ${board === 'daily' ? 'bg-white/20' : 'text-white/60'}`}>Today</button>
-            <button onClick={() => setBoard('free')} className={`rounded-full px-3 py-1 ${board === 'free' ? 'bg-white/20' : 'text-white/60'}`}>
-              {getCity(cityId)?.city} {weatherEmoji({ condition: weather === 'rain' ? 'rain' : weather === 'snow' ? 'snow' : weather === 'fog' ? 'mist' : 'clear', tempC: 18, windSpeed: weather === 'wind' ? 15 : 2, windDeg: 0, isNight: weather === 'night' })}
+            <button onClick={() => setBoard('free')} className={`truncate rounded-full px-3 py-1 ${board === 'free' ? 'bg-white/20' : 'text-white/60'}`}>
+              {pick.city} · {WEATHER_LABEL[weather]}
             </button>
           </div>
-          <Leaderboard board={board === 'daily' ? `daily:${daily.date}` : `free:${cityId}:${weather}`} />
-          <p className="mt-4 text-xs text-white/40">Every score is verified by replaying the run on the server.</p>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <Leaderboard board={board === 'daily' ? `daily:${daily.date}` : `free:${cityId}:${weather}`} limit={9} />
+          </div>
         </aside>
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 overflow-hidden border-t border-red-500/40 bg-black/80 py-2 text-sm backdrop-blur">
+      <div className="absolute inset-x-0 bottom-0 overflow-hidden border-t border-red-500/40 bg-black/80 py-2 text-sm backdrop-blur">
         <div className="flex w-max animate-[ticker_40s_linear_infinite] gap-12 whitespace-nowrap pl-4">
           {[...TICKER, ...TICKER].map((t, i) => (
             <span key={i}><span className="mr-2 rounded bg-red-600 px-1.5 py-0.5 text-xs font-bold">LIVE</span>{t}</span>

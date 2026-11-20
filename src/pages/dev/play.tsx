@@ -8,7 +8,9 @@ import { CITY_MAZES } from '@/cities'
 import { CLEAR_WEATHER, DEFAULT_PLAN, MAX_TICKS, type WeatherSnapshot } from '@/engine'
 import { buildConfig } from '@/game/daily'
 import { GameCanvas, type Hud } from '@/game/GameCanvas'
-import { HudBar } from '@/game/HudBar'
+import { getCity } from '@/cities'
+import { HudOverlay } from '@/game/HudOverlay'
+import type { WeatherRecord } from '@/game/weather-source'
 import { useView } from '@/game/useView'
 
 const WEATHERS: Record<string, WeatherSnapshot> = {
@@ -47,8 +49,6 @@ export default function PracticePage() {
           <button onClick={() => setView(view === '3d' ? '2d' : '3d')} className="rounded border border-white/30 px-3 py-1" data-testid="view-toggle">
             {view === '3d' ? 'Switch to 2D' : 'Switch to 3D'}
           </button>
-          {hud && <HudBar hud={hud} />}
-          {hud?.countdown ? <span>starts in {hud.countdown}</span> : null}
           {last && <span className="opacity-70">{last}</span>}
         </div>
         <GameCanvas

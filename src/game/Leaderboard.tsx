@@ -8,6 +8,7 @@ export interface LeaderRow {
   name: string
   score: number
   runId: string
+  guest?: boolean
 }
 
 /** Verified scores on one board (`daily:<date>` or `free:<city>:<weather>`), best first. Server-written only. */
@@ -40,6 +41,7 @@ export function Leaderboard({ board, limit = 10, compact = false }: { board: str
           <span>
             <span className={`mr-3 inline-block w-5 ${i < 3 ? 'text-amber-300' : 'opacity-60'}`}>{i + 1}</span>
             {r.data.name}
+            {r.data.guest && <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">guest</span>}
           </span>
           <span className="font-mono">{r.data.score.toLocaleString('en-US')}</span>
         </li>

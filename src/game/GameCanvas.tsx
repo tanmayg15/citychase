@@ -70,7 +70,7 @@ const OUTCOME: Record<string, string> = {
 
 export function GameCanvas({
   cfg, maxTicks, onHud, onEnd, view = '3d', weather = CLEAR_WEATHER,
-  waitForStart = false, showEndScreen = false, onRestart, onQuit,
+  waitForStart = false, showEndScreen = false, onRestart, onQuit, fill = false, children,
 }: {
   cfg: GameConfig
   maxTicks: number
@@ -84,6 +84,10 @@ export function GameCanvas({
   showEndScreen?: boolean
   onRestart?: () => void
   onQuit?: () => void
+  /** Take the whole parent (full-screen game). */
+  fill?: boolean
+  /** Overlays drawn above the game (e.g. the HUD). */
+  children?: React.ReactNode
 }) {
   const [ui, setUi] = useState<Ui>(waitForStart ? 'ready' : 'running')
   const uiRef = useRef<Ui>(ui)
@@ -122,14 +126,14 @@ export function GameCanvas({
     if (!el) return
     const fit = () => {
       const w = el.clientWidth
-      const h = Math.floor(Math.min(window.innerHeight * 0.72, w * 0.66))
+      const h = fill ? el.clientHeight : Math.floor(Math.min(window.innerHeight * 0.72, w * 0.66))
       setBox({ w, h })
     }
     fit()
     const ro = new ResizeObserver(fit)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [fill])
 
   // Resizing changes canvas sizes only; it never restarts the game.
   useEffect(() => {
@@ -325,7 +329,7 @@ export function GameCanvas({
 
   const overlays = (
     <>
-      <div className="absolute left-2 top-2 z-30 flex gap-2">
+      <div className={`absolute z-30 flex gap-2 ${fill ? 'bottom-3 left-3' : 'left-2 top-2'}`}>
         {(ui === 'running' || ui === 'paused') && (
           <button onClick={togglePause} className="rounded-md bg-black/60 px-3 py-1.5 text-sm text-white backdrop-blur" data-testid="pause-button" aria-label={ui === 'paused' ? 'Resume' : 'Pause'}>
             {ui === 'paused' ? '▶ Resume' : '❚❚ Pause'}
@@ -372,18 +376,19 @@ export function GameCanvas({
   const mapW = cfg.maze.width * mapTile, mapH = cfg.maze.height * mapTile
 
   return (
-    <div ref={wrapRef} className="relative w-full" style={{ touchAction: 'none' }} data-testid="game-view" data-view={mode}>
+    <div ref={wrapRef} className={`relative w-full ${fill ? 'h-full' : ''}`} style={{ touchAction: 'none' }} data-testid="game-view" data-view={mode}>
       {mode === '3d' ? (
         // Distinct keys: a canvas that already has a 2D context can never give a
         // WebGL one, so switching views must mount fresh canvas elements.
-        <div key="view-3d" className="relative overflow-hidden rounded-xl" style={{ width: box.w, height: box.h, background: '#0b0d12' }}>
+        <div key="view-3d" className={`relative overflow-hidden ${fill ? '' : 'rounded-xl'}`} style={{ width: box.w, height: box.h, background: '#0b0d12' }}>
           <canvas ref={glRef} data-testid="game-canvas" style={{ width: box.w, height: box.h, display: 'block' }} />
           {night && <div ref={nightRef} className="pointer-events-none absolute inset-0" />}
           {overlays}
+          {children}
           <canvas
             ref={mapRef}
             data-testid="minimap"
-            className="absolute right-2 top-2 rounded-md border border-white/20 shadow-lg"
+            className={`absolute rounded-md border border-white/20 shadow-lg ${fill ? 'bottom-3 right-3' : 'right-2 top-2'}`}
             style={{ width: mapW, height: mapH, opacity: 0.92 }}
           />
         </div>
@@ -392,6 +397,7 @@ export function GameCanvas({
           <div className="relative" style={{ width: mapW, height: mapH }}>
             <canvas ref={mapRef} data-testid="game-canvas" className="rounded-xl" style={{ width: mapW, height: mapH }} />
             {overlays}
+            {children}
           </div>
         </div>
       )}

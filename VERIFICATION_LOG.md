@@ -293,3 +293,22 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Feedback round: lobby, full-screen game, HUD, end screen, guest leaderboard (2026-11-20)
+
+### Tanmay asked
+Remove "How it works" and the sign-in note; the lobby must fit without scrolling; a more creative end screen; guests on the leaderboard ("play as Guest, sign in to keep scores"); the game full screen; a readable info bar.
+
+### Agent did
+- **Guest leaderboard:** the server issues a guest identity (random id + HMAC token, generated name "Guest 1234": no typed names, so no offensive text). `POST /api/guest/submit` verifies the run exactly like a signed-in run (signed ticket, single use, real time, server replay) and puts it on the board tagged GUEST. Abuse cap: 60 guest runs per IP per day, with the IP stored only as a keyed hash. `claimGuest` (on sign-in) moves the guest's runs and board entries to the account, keeping the best per board. 5 new tests (36 action tests pass).
+- **Full-screen game** with a redesigned HUD in three glass panels: where (city, district, weather, rules) / score + 10 loot diamonds + safehouse status / clock + lives, plus a flashing WANTED banner. Pause/mute moved bottom-left, minimap bottom-right.
+- **End screen:** the run's city keeps playing in 3D behind it; a coloured headline per outcome, a count-up score, stat tiles (loot, time, seconds seen, cars left), "You're on the board as Guest 1234 · Sign in to keep your scores", Play again / Share / Change city, and the leaderboard beside it.
+- **Lobby:** one screen at 1440×900 (measured: no page or panel scroll), "How it works" link and sign-in note removed (the `/about` page stays unlinked for SEO/prerender), compact city grid, panels sized to content so the 3D city shows.
+- Removed the old `HudBar`; the practice page uses the new HUD.
+- **Browser (local):** lobby (no scroll); Free Play NYC full screen with readable HUD; the run timed out → end screen showed "OUT OF TIME", stats, "on the board as Guest 7093", and the leaderboard listed Guest 7093 (GUEST) after server verification.
+
+### Needs human verification
+- Sign in after guest runs on the live site and check the scores move to your account.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_

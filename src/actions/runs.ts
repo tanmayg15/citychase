@@ -21,7 +21,9 @@ import {
 } from '../engine'
 import { buildConfig, dailyFor, runSeed, utcDate } from '../game/daily'
 import { isPreset, presetWeather, type WeatherPreset, type WeatherRecord } from '../game/weather-source'
-import { newTicketId, signTicket, verifyTicket, type RunTicket } from '../server/tickets'
+import {
+  hashIp, newGuest, newTicketId, signTicket, verifyGuest, verifyTicket, type GuestIdentity, type RunTicket,
+} from '../server/tickets'
 import { cachedWeather, resolveWeather } from './weather'
 
 export const MAX_RUNS_PER_DAY = 40
@@ -117,7 +119,7 @@ export async function setupRun(
 /** Replay, run the real-time check, store the verified run, and update the board. */
 async function verifyAndRecord(
   tools: ActionTools, userId: string, runId: string, run: Omit<RunRow, 'status' | 'userId'>,
-  inputLog: unknown, existing: boolean,
+  inputLog: unknown, existing: boolean, nameOverride?: string,
 ): Promise<ActionResult<Record<string, unknown>>> {
   const reject = async (reason: string) => {
     if (existing) await tools.update('runs', runId, { status: 'rejected', rejectReason: reason })
@@ -152,7 +154,7 @@ async function verifyAndRecord(
   if (end.score > prevScore) {
     const lb = await tools.create('leaderboard', {
       board: run.board, date: run.date, cityId: run.cityId, userId,
-      name: await displayName(tools, userId), score: end.score, runId,
+      name: nameOverride ?? await displayName(tools, userId), score: end.score, runId, guest: userId.startsWith('guest_'),
     }, lbId)
     if (!lb.success) return lb
   }
@@ -212,7 +214,67 @@ export async function guestStart(
     return fail((e as Error).message)
   }
   const ticket: RunTicket = { v: 1, id: newTicketId(), ...setup, engineVersion: ENGINE_VERSION, startedAtMs: Date.now() }
-  return { success: true as const, data: { ticket: await signTicket(env.RUN_TICKET_SECRET, ticket), ...setup } }
+  // Reuse the guest's identity if it is genuine, otherwise issue a new one.
+  const guest = (await verifyGuest(env.RUN_TICKET_SECRET, params.guestId, params.guestToken))
+    ?? (await newGuest(env.RUN_TICKET_SECRET))
+  return { success: true as const, data: { ticket: await signTicket(env.RUN_TICKET_SECRET, ticket), guest, ...setup } }
+}
+
+export const MAX_GUEST_SUBMITS_PER_IP_PER_DAY = 60
+
+/**
+ * Guest submit (no sign-in): verify the ticket + input log exactly like a
+ * signed-in run and put the score on the board as "Guest 1234". Abuse
+ * limits: the replay proves the score, tickets are single-use, names are
+ * generated, and each IP (stored only as a keyed hash) gets a daily cap.
+ */
+export async function guestSubmit(
+  env: Pick<Env, 'RUN_TICKET_SECRET'>, tools: ActionTools, params: Record<string, unknown>, ip: string,
+) {
+  if (!env.RUN_TICKET_SECRET) return fail('Guest play is not configured')
+  const guest = await verifyGuest(env.RUN_TICKET_SECRET, params.guestId, params.guestToken)
+  if (!guest) return fail('Invalid guest identity')
+  const t = await verifyTicket(env.RUN_TICKET_SECRET, params.ticket)
+  if (!t) return fail('Invalid ticket')
+  if (Date.now() - t.startedAtMs > MAX_TICKET_AGE_MS) return fail('Ticket expired')
+  const runId = `t_${t.id}`
+  if ((await tools.get('runs', runId)).success) return fail('Run already submitted')
+
+  const date = utcDate()
+  const ipKey = `${date}:guest-submit:${await hashIp(env.RUN_TICKET_SECRET, ip)}`
+  const prev = await tools.get('usage', ipKey)
+  const count = prev.success ? Number((prev.data.record.data as { count?: number }).count ?? 0) : 0
+  if (count >= MAX_GUEST_SUBMITS_PER_IP_PER_DAY) return fail('Too many guest runs today: sign in to keep playing on the board')
+  await tools.create('usage', { date, kind: 'guest-submit', scope: ipKey.split(':').pop()!, count: count + 1 }, ipKey)
+
+  const { v: _v, id: _id, ...run } = t
+  const res = await verifyAndRecord(tools, `guest_${guest.guestId}`, runId, run, params.inputLog, false, guest.guestName)
+  return res.success ? { success: true as const, data: { ...res.data, guestName: guest.guestName } } : res
+}
+
+/** Signed-in: move a guest's runs and board entries to this account (keeps the best per board). */
+export const claimGuest: ActionHandler<Env> = async ({ userId, params, tools, env }) => {
+  if (!env.RUN_TICKET_SECRET) return fail('Guest play is not configured')
+  const guest: GuestIdentity | null = await verifyGuest(env.RUN_TICKET_SECRET, params.guestId, params.guestToken)
+  if (!guest) return fail('Invalid guest identity')
+  const guestUser = `guest_${guest.guestId}`
+  const name = await displayName(tools, userId)
+  const rows = await tools.query('leaderboard', { where: { userId: guestUser }, limit: 500 })
+  if (!rows.success) return rows
+  let moved = 0
+  for (const r of rows.data.records) {
+    const g = r.data as unknown as LeaderRow & { board: string; date: string; cityId: string; runId: string }
+    const mine = await tools.get('leaderboard', `${g.board}:${userId}`)
+    const myScore = mine.success ? (mine.data.record.data as unknown as LeaderRow).score : -1
+    if (g.score > myScore) {
+      await tools.create('leaderboard', { ...g, userId, name, guest: false }, `${g.board}:${userId}`)
+    }
+    await tools.remove('leaderboard', r.recordId)
+    moved++
+  }
+  const runs = await tools.query('runs', { where: { userId: guestUser }, limit: 500 })
+  if (runs.success) for (const r of runs.data.records) await tools.update('runs', r.recordId, { userId })
+  return { success: true, data: { moved } }
 }
 
 /** Signed-in: turn a guest ticket + input log into a verified run, exactly once. */

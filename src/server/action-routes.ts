@@ -36,7 +36,7 @@ import {
 } from 'deepspace/worker'
 import type { ActionResult, ActionTools, VerifyResult } from 'deepspace/worker'
 import { actions } from '../actions/index.js'
-import { guestStart } from '../actions/runs.js'
+import { guestStart, guestSubmit } from '../actions/runs.js'
 import { integrations } from '../integrations.js'
 import type { AppContext, Env } from '../../worker.js'
 
@@ -50,6 +50,15 @@ export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: Resolve
     const params = await c.req.json<Record<string, unknown>>().catch(() => ({}))
     const tools = createActionTools(c.env, 'guest', '')
     const result = await guestStart(c.env, tools, params as Record<string, unknown>)
+    return c.json(result as unknown as Record<string, unknown>, result.success ? 200 : 400)
+  })
+  // Guest submit: verified exactly like a signed-in run, stored under the guest
+  // identity. The IP is only used (as a keyed hash) for the daily abuse cap.
+  app.post('/api/guest/submit', async (c) => {
+    const params = await c.req.json<Record<string, unknown>>().catch(() => ({}))
+    const tools = createActionTools(c.env, 'guest', '')
+    const ip = c.req.header('cf-connecting-ip') ?? 'local'
+    const result = await guestSubmit(c.env, tools, params as Record<string, unknown>, ip)
     return c.json(result as unknown as Record<string, unknown>, result.success ? 200 : 400)
   })
 

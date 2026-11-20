@@ -26,36 +26,57 @@ export async function guestStart<T>(params: Record<string, unknown>): Promise<T>
   return body.data as T
 }
 
-// ─── A finished guest run waiting for sign-in (survives the OAuth redirect) ───
+// ─── Guest identity ─────────────────────────────────────────────────────────
+// Issued by the server on the first guest run (signed token) and kept in this
+// browser. Guest scores go on the board as "Guest 1234"; signing in moves them
+// to the account (claimGuest).
 
-const PENDING_KEY = 'citychase:pendingClaim'
+const GUEST_KEY = 'citychase:guest'
 
-export interface PendingClaim {
-  ticket: string
-  inputLog: Array<[number, number]>
-  localScore: number
-  outcome: string
-  cityId: string
-  board: string
-  savedAtMs: number
+export interface Guest {
+  guestId: string
+  guestToken: string
+  guestName: string
 }
 
-export function savePending(p: PendingClaim): void {
-  try { localStorage.setItem(PENDING_KEY, JSON.stringify(p)) } catch { /* storage blocked */ }
-}
-
-export function loadPending(): PendingClaim | null {
+export function loadGuest(): Guest | null {
   try {
-    const raw = localStorage.getItem(PENDING_KEY)
-    if (!raw) return null
-    const p = JSON.parse(raw) as PendingClaim
-    // Tickets expire server-side after an hour; don't offer stale ones.
-    return Date.now() - p.savedAtMs < 55 * 60 * 1000 ? p : null
+    const raw = localStorage.getItem(GUEST_KEY)
+    return raw ? (JSON.parse(raw) as Guest) : null
   } catch {
     return null
   }
 }
 
-export function clearPending(): void {
-  try { localStorage.removeItem(PENDING_KEY) } catch { /* storage blocked */ }
+export function saveGuest(g: Guest): void {
+  try { localStorage.setItem(GUEST_KEY, JSON.stringify(g)) } catch { /* storage blocked */ }
+}
+
+export function clearGuest(): void {
+  try { localStorage.removeItem(GUEST_KEY) } catch { /* storage blocked */ }
+}
+
+/** Public: verify a guest run on the server and put it on the board. */
+export async function guestSubmit<T>(params: Record<string, unknown>): Promise<T> {
+  const res = await fetch('/api/guest/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  const body = (await res.json().catch(() => null)) as { success?: boolean; data?: T; error?: string } | null
+  if (!res.ok || !body?.success) throw new Error(body?.error ?? `Request failed (${res.status})`)
+  return body.data as T
+}
+
+/** After sign-in: move this browser's guest scores to the account, once. */
+export async function claimGuestIfAny(): Promise<number> {
+  const g = loadGuest()
+  if (!g) return 0
+  try {
+    const r = await callAction<{ moved: number }>('claimGuest', { guestId: g.guestId, guestToken: g.guestToken })
+    clearGuest()
+    return r.moved
+  } catch {
+    return 0
+  }
 }

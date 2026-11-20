@@ -56,6 +56,7 @@ export const leaderboardSchema: CollectionSchema = {
     { name: 'name', storage: 'text', interpretation: 'plain' },
     { name: 'score', storage: 'number', interpretation: 'plain', required: true },
     { name: 'runId', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'guest', storage: 'number', interpretation: { kind: 'boolean' } },
   ],
   uniqueOn: ['board', 'userId'],
   permissions: {
