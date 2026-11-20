@@ -115,7 +115,8 @@ export class CityScene {
   private player: CarParts
   private cops: CarParts[] = []
   private copYaw: number[] = []
-  private playerYaw = 0
+  /** Start facing up the street (north), like the starting grid. */
+  private playerYaw = Math.PI / 2
   private lastPlayerPos: { x: number; y: number } | null = null
   private loot: THREE.Mesh[] = []
   private lootGlow: THREE.Sprite[] = []
@@ -664,10 +665,13 @@ export class CityScene {
     const prev = this.lastPlayerPos
     this.lastPlayerPos = { x: pp.x, y: pp.y }
     const vx = prev ? pp.x - prev.x : 0, vz = prev ? pp.y - prev.y : 0
-    if (Math.hypot(vx, vz) > 0.002 && Math.hypot(vx, vz) < 1) {
+    const speed = Math.hypot(vx, vz)
+    if (s.player.dir === Dir.None || speed > 1) {
+      // Parked at the start or just respawned (big jump): face straight up the
+      // street, never a leftover angle from the respawn snap.
+      if (s.player.dir === Dir.None) this.playerYaw = Math.PI / 2
+    } else if (speed > 0.004) {
       this.playerYaw = turn(this.playerYaw, Math.atan2(-vz, vx))
-    } else if (s.player.dir !== Dir.None && !prev) {
-      this.playerYaw = YAW[s.player.dir]
     }
     this.player.group.rotation.y = this.playerYaw
 

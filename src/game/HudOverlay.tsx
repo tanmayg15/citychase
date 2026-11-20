@@ -24,6 +24,18 @@ export function HudOverlay({ hud, city, weather, mode }: {
   const low = secs <= 30
 
   return (
+    <>
+    {hud && hud.respawnIn > 0 && (
+      <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/45 backdrop-blur-[2px]" data-testid="respawn-countdown">
+        <div className="rounded-3xl border border-red-400/40 bg-black/70 px-10 py-6 text-center shadow-2xl">
+          <p className="text-sm font-black tracking-[0.35em] text-red-400">BUSTED</p>
+          <p className="mt-1 text-white/70">{hud.lives} {hud.lives === 1 ? 'car' : 'cars'} left · back on the road in</p>
+          <p key={hud.respawnIn} className="mt-1 animate-[pop_0.45s_ease-out] text-7xl font-black text-white" style={{ textShadow: '0 0 24px rgba(255,138,31,0.7)' }}>
+            {hud.respawnIn}
+          </p>
+        </div>
+      </div>
+    )}
     <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 text-white sm:p-4" data-testid="hud">
       {/* Left: where */}
       <div className={`${glass} hidden max-w-[34%] px-4 py-3 md:block`}>
@@ -82,5 +94,6 @@ export function HudOverlay({ hud, city, weather, mode }: {
         </div>
       </div>
     </div>
+    </>
   )
 }

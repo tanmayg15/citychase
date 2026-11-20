@@ -406,3 +406,7 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 - **Checked the logs first:** both recent runs saved without errors to `free:nyc-midtown:clear` (1,986 and 893). The lobby's city tab showed the *picker* selection (Chicago · Live), not where the run happened, and "Today" holds only the daily heist (Singapore), which wasn't played. So this was a design/labelling problem, not a save failure.
 - **Fixes:** starting a Free Play run stores its city/weather, so the lobby picker (and its board tab) shows the board you last played; all-time rows record `fromBoard` and show "New York · Clear" / "Daily heist · Singapore" under the name; the "Today" tab is renamed "Today's heist". Tests: `fromBoard` stored, `boardLabel` cases (172 pass). Browser: after a NYC · Clear run the lobby tabs read "All-time | Today's heist | New York · ☀️ Clear" and the city tab lists Guest 7093 · 1,986.
 - Deployed together with the junction-timing and parked-car-shake fixes (1d70957), at Tanmay's request.
+
+## 2026-11-20 — Fixed start facing + respawn countdown
+**Agent did:** The car now faces up the street at the start and after every respawn, and only rotates while it is moving. A "BUSTED · back on the road in N" countdown shows while the game is paused after a catch (`respawn-countdown`). tsc is clean; 172 tests pass.
+**Needs human verification:** Get caught once and check that the countdown reads 2 → 1 and then you can drive again.

@@ -61,6 +61,8 @@ export interface Hud {
   heat: number
   /** The police radio line currently being spoken, for subtitles. */
   radio: string | null
+  /** Seconds until you can drive again after being caught (0 = driving). */
+  respawnIn: number
 }
 
 /** WebGL available and the device is not obviously too weak for the 3D view. */
@@ -329,6 +331,7 @@ export function GameCanvas({
         wanted: s.cops.some((c) => c.status === 'chase'),
         heat: s.heat,
         radio: now < radioUntil ? radioText : null,
+        respawnIn: s.status === 'playing' && s.pauseUntil > s.tick ? Math.ceil((s.pauseUntil - s.tick) / TICK_RATE) : 0,
       })
       if (s.status !== 'playing' && !ended) {
         ended = true
