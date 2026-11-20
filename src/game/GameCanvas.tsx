@@ -105,6 +105,7 @@ export function GameCanvas({
   useEffect(() => setMode(view), [view])
   // Audio is shared across games: unlock it on any gesture, silence it on unmount.
   useEffect(() => {
+    sfx.current?.setPaused(false) // a previous game may have been quit while paused
     if (uiRef.current === 'running') sfx.current?.resume() // allowed after a recent click (e.g. Start run)
     const off = unlockOnNextGesture()
     return () => { off(); sfx.current?.quiet() }
@@ -181,7 +182,7 @@ export function GameCanvas({
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (uiRef.current === 'running' || uiRef.current === 'paused')) {
         e.preventDefault()
-        if (uiRef.current === 'running') { setUiBoth('paused'); sound?.suspend() } else { setUiBoth('running'); sound?.resume() }
+        if (uiRef.current === 'running') { setUiBoth('paused'); sound?.setPaused(true) } else { setUiBoth('running'); sound?.resume(); sound?.setPaused(false) }
         return
       }
       if ((e.key === 'Enter' || e.key === ' ') && uiRef.current === 'ready') {
@@ -226,6 +227,7 @@ export function GameCanvas({
         acc += Math.min(now - last, MAX_FRAME_MS)
         while (acc >= TICK_MS && s.status === 'playing') {
           acc -= TICK_MS
+          const prevDir = s.player.dir
           if (pending !== Dir.None) {
             log.push([s.tick, pending])
             step(cfg, s, pending)
@@ -234,6 +236,7 @@ export function GameCanvas({
             step(cfg, s)
           }
           motion.update(s)
+          if (prevDir !== Dir.None && s.player.dir !== prevDir) sound?.screech(cfg.modifiers.slipTiles > 0)
           for (const e of s.events) {
             if (e.type === 'loot') sound?.loot()
             else if (e.type === 'exitOpen') sound?.exitOpen()
@@ -244,8 +247,12 @@ export function GameCanvas({
           }
         }
       }
-      sound?.update(state === 'running' && countdown === 0 && s.player.dir !== Dir.None && s.status === 'playing',
-        state === 'running' && s.status === 'playing' && s.cops.some((c) => c.status === 'chase'), now)
+      // Engine and siren only while actually driving; silent on start/pause/end screens.
+      if (state === 'running' && s.status === 'playing') {
+        sound?.update(countdown === 0 && s.player.dir !== Dir.None, s.cops.some((c) => c.status === 'chase'), now)
+      } else {
+        sound?.quiet()
+      }
       last = now
       const alpha = countdown > 0 ? 0 : Math.min(1, acc / TICK_MS)
       const pos = motion.sample(s, alpha)
@@ -286,7 +293,7 @@ export function GameCanvas({
         ended = true
         setFinal({ status: s.status, score: s.score, loot: s.lootTaken })
         setUiBoth('ended')
-        sound?.update(false, false, now)
+        sound?.quiet()
         cb.current.onEnd(log, s)
       }
       raf = requestAnimationFrame(frame)
@@ -295,7 +302,7 @@ export function GameCanvas({
 
     return () => {
       disposed = true
-      sound?.update(false, false, 0)
+      sound?.quiet()
       cancelAnimationFrame(raf)
       scene?.dispose()
       window.removeEventListener('keydown', onKey)
@@ -306,10 +313,10 @@ export function GameCanvas({
   }, [cfg, maxTicks, mode, weather])
 
   const night = cfg.modifiers.visionRadius !== null
-  const start = () => { sfx.current?.resume(); sfx.current?.click(); setUiBoth('running') }
+  const start = () => { sfx.current?.resume(); sfx.current?.setPaused(false); sfx.current?.click(); setUiBoth('running') }
   const togglePause = () => {
-    if (ui === 'running') { setUiBoth('paused'); sfx.current?.suspend() }
-    else if (ui === 'paused') { setUiBoth('running'); sfx.current?.resume() }
+    if (ui === 'running') { setUiBoth('paused'); sfx.current?.setPaused(true) }
+    else if (ui === 'paused') { setUiBoth('running'); sfx.current?.resume(); sfx.current?.setPaused(false) }
   }
   const toggleMute = () => { const m = !muted; setMuted(m); sfx.current?.setMuted(m) }
   const btn = 'rounded-lg px-5 py-2.5 font-bold'

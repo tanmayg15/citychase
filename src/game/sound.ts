@@ -24,6 +24,8 @@ export class Sfx {
   private sirenOn = false
   private noise: AudioBuffer | null = null
   private muted: boolean
+  /** False while paused / not in play: continuous sounds silent, one-shots dropped. */
+  private active = true
 
   constructor(muted = loadMuted()) {
     this.muted = muted
@@ -86,15 +88,21 @@ export class Sfx {
     return this.muted
   }
 
-  /** Pause silences the continuous sounds; tones resume on the next update. */
-  suspend(): void {
-    if (this.ctx && this.ctx.state === 'running') void this.ctx.suspend()
+  /**
+   * Pause: silence the engine and siren and drop one-off sounds until resumed.
+   * (Suspending the whole AudioContext was not enough: the resume-on-gesture
+   * safety net woke it up again on the next key press while still paused.)
+   */
+  setPaused(paused: boolean): void {
+    this.active = !paused
+    if (paused) this.quiet()
   }
 
   /** Continuous sounds, called every frame. */
   update(moving: boolean, wanted: boolean, timeMs: number): void {
     const ctx = this.ctx
     if (!ctx || !this.engineGain || !this.engineOsc || !this.sirenGain || !this.sirenOsc) return
+    if (!this.active) return
     const t = ctx.currentTime
     this.engineGain.gain.setTargetAtTime(moving ? 0.16 : 0.06, t, 0.15)
     this.engineOsc.frequency.setTargetAtTime(moving ? 78 + 6 * Math.sin(timeMs / 180) : 50, t, 0.2)
@@ -107,7 +115,7 @@ export class Sfx {
 
   private tone(freq: number, start: number, dur: number, type: OscillatorType = 'square', vol = 0.18, slideTo?: number) {
     const ctx = this.ctx
-    if (!ctx || !this.master) return
+    if (!ctx || !this.master || !this.active) return
     const o = ctx.createOscillator()
     const g = ctx.createGain()
     o.type = type
@@ -123,7 +131,7 @@ export class Sfx {
 
   private burst(dur: number, filterFreq: number, vol: number, type: BiquadFilterType = 'lowpass', sweepTo?: number) {
     const ctx = this.ctx
-    if (!ctx || !this.master || !this.noise) return
+    if (!ctx || !this.master || !this.noise || !this.active) return
     const src = ctx.createBufferSource()
     src.buffer = this.noise
     const f = ctx.createBiquadFilter()
@@ -139,7 +147,17 @@ export class Sfx {
   }
 
   countdown(final: boolean): void { this.tone(final ? 880 : 440, 0, final ? 0.35 : 0.15, 'square', 0.14) }
-  loot(): void { this.tone(988, 0, 0.09, 'triangle', 0.2); this.tone(1319, 0.07, 0.18, 'triangle', 0.2) }
+  /** "Cha-ching": two bright notes, a high ping and a sparkle of noise. */
+  loot(): void {
+    this.tone(1319, 0, 0.08, 'square', 0.12)
+    this.tone(1760, 0.06, 0.22, 'triangle', 0.2)
+    this.tone(2637, 0.1, 0.25, 'sine', 0.08)
+    this.burst(0.18, 6000, 0.12, 'highpass')
+  }
+  /** Tyre screech on a turn; longer and lower on wet roads. */
+  screech(wet: boolean): void {
+    this.burst(wet ? 0.38 : 0.2, wet ? 1500 : 2600, wet ? 0.2 : 0.16, 'bandpass', wet ? 900 : 1700)
+  }
   smoke(): void { this.burst(0.8, 3000, 0.35, 'bandpass', 300) }
   spotted(): void { this.tone(620, 0, 0.12, 'sawtooth', 0.08, 900) }
   caught(): void { this.burst(0.5, 900, 0.6); this.tone(90, 0, 0.4, 'sine', 0.4, 40) }
@@ -150,8 +168,11 @@ export class Sfx {
 
   /** Silence the continuous sounds (engine, siren) without closing audio. */
   quiet(): void {
-    this.update(false, false, 0)
-    if (this.engineGain && this.ctx) this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05)
+    if (!this.ctx) return
+    const t = this.ctx.currentTime
+    this.engineGain?.gain.setTargetAtTime(0, t, 0.05)
+    this.sirenGain?.gain.setTargetAtTime(0, t, 0.05)
+    this.sirenOn = false
   }
 
   dispose(): void {
