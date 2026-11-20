@@ -24,6 +24,19 @@ export const OWM_QUERY: Record<string, string> = {
   'barcelona-eixample': 'Barcelona,ES',
   'mumbai-fort': 'Mumbai,IN',
   'sf-mission': 'San Francisco,US',
+  'rome-centro': 'Rome,IT',
+  'berlin-mitte': 'Berlin,DE',
+  'seoul-gangnam': 'Seoul,KR',
+  'singapore-chinatown': 'Singapore,SG',
+  'dubai-deira': 'Dubai,AE',
+  'sydney-cbd': 'Sydney,AU',
+  'rio-centro': 'Rio de Janeiro,BR',
+  'istanbul-beyoglu': 'Istanbul,TR',
+  'toronto-downtown': 'Toronto,CA',
+  'amsterdam-centrum': 'Amsterdam,NL',
+  'chicago-loop': 'Chicago,US',
+  'delhi-cp': 'New Delhi,IN',
+  'bengaluru-mg-road': 'Bengaluru,IN',
 }
 
 /** Varied on purpose so every rule shows up in mock mode. */
@@ -35,6 +48,19 @@ const MOCK: Record<string, Omit<WeatherSnapshot, 'isNight'> & { description: str
   'barcelona-eixample': { condition: 'clear', tempC: 19, windSpeed: 3, windDeg: 90, description: 'clear sky (mock)' },
   'mumbai-fort': { condition: 'clear', tempC: 31, windSpeed: 4, windDeg: 270, description: 'hot and hazy (mock)' },
   'sf-mission': { condition: 'mist', tempC: 15, windSpeed: 9, windDeg: 270, description: 'fog and wind (mock)' },
+  'rome-centro': { condition: 'clear', tempC: 22, windSpeed: 3, windDeg: 200, description: 'sunny (mock)' },
+  'berlin-mitte': { condition: 'drizzle', tempC: 7, windSpeed: 6, windDeg: 250, description: 'drizzle (mock)' },
+  'seoul-gangnam': { condition: 'clouds', tempC: 9, windSpeed: 4, windDeg: 300, description: 'overcast (mock)' },
+  'singapore-chinatown': { condition: 'thunderstorm', tempC: 30, windSpeed: 5, windDeg: 180, description: 'thunderstorm (mock)' },
+  'dubai-deira': { condition: 'clear', tempC: 34, windSpeed: 4, windDeg: 320, description: 'hot sun (mock)' },
+  'sydney-cbd': { condition: 'clear', tempC: 24, windSpeed: 9, windDeg: 140, description: 'breezy (mock)' },
+  'rio-centro': { condition: 'clear', tempC: 29, windSpeed: 3, windDeg: 120, description: 'hot and humid (mock)' },
+  'istanbul-beyoglu': { condition: 'rain', tempC: 11, windSpeed: 7, windDeg: 30, description: 'rain (mock)' },
+  'toronto-downtown': { condition: 'snow', tempC: -3, windSpeed: 6, windDeg: 290, description: 'light snow (mock)' },
+  'amsterdam-centrum': { condition: 'clouds', tempC: 8, windSpeed: 11, windDeg: 240, description: 'windy (mock)' },
+  'chicago-loop': { condition: 'clear', tempC: 4, windSpeed: 13, windDeg: 280, description: 'windy city (mock)' },
+  'delhi-cp': { condition: 'mist', tempC: 21, windSpeed: 2, windDeg: 0, description: 'smog (mock)' },
+  'bengaluru-mg-road': { condition: 'clouds', tempC: 24, windSpeed: 3, windDeg: 90, description: 'pleasant (mock)' },
 }
 
 export function localHour(timezone: string, nowMs: number): number {

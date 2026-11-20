@@ -21,9 +21,9 @@ function reachable(m: Maze): number {
 }
 
 describe('city mazes', () => {
-  it('ships all 7 cities with unique ids and IANA timezones', () => {
-    expect(CITY_MAZES).toHaveLength(7)
-    expect(new Set(CITY_MAZES.map((c) => c.id)).size).toBe(7)
+  it('ships all 20 cities with unique ids and IANA timezones', () => {
+    expect(CITY_MAZES).toHaveLength(20)
+    expect(new Set(CITY_MAZES.map((c) => c.id)).size).toBe(20)
     for (const c of CITY_MAZES) expect(() => new Intl.DateTimeFormat('en', { timeZone: c.timezone })).not.toThrow()
   })
 
@@ -62,5 +62,12 @@ describe('city mazes', () => {
       expect(createGame(cfg).loot.length).toBeGreaterThanOrEqual(8)
       expect(replay(cfg, log).status).not.toBe('playing')
     })
+  })
+})
+
+describe('weather coverage', () => {
+  it('every city has a live-weather query', async () => {
+    const { OWM_QUERY } = await import('../game/weather-source')
+    for (const c of CITY_MAZES) expect(OWM_QUERY[c.id], c.id).toBeTruthy()
   })
 })

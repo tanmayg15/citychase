@@ -115,8 +115,9 @@ function buildCity(c, raw) {
   })
   // A street that crosses from one node's cell into the next is credited with
   // the distance it travelled in the first cell. Weak links are dropped.
+  const minSupport = (c.minSupport ?? 1) * MIN_SUPPORT
   for (const [k, v] of support) {
-    if (v < MIN_SUPPORT) continue
+    if (v < minSupport) continue
     const [a, b] = k.split(',').map(Number)
     adj[a].add(b); adj[b].add(a)
   }

@@ -33,7 +33,7 @@ for (const c of CITIES.filter((c) => !wanted.length || wanted.includes(c.id))) {
       body: 'data=' + encodeURIComponent(query),
     })
     if (res.ok) break
-    if (attempt >= 5 || (res.status !== 429 && res.status !== 504)) throw new Error(`${c.id}: HTTP ${res.status} ${await res.text()}`)
+    if (attempt >= 5 || ![429, 502, 503, 504].includes(res.status)) throw new Error(`${c.id}: HTTP ${res.status} ${await res.text()}`)
     console.log(`${c.id}: HTTP ${res.status}, retrying in ${wait / 1000}s`)
     await new Promise((r) => setTimeout(r, wait))
   }
