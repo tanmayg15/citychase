@@ -43,11 +43,17 @@ export const runsSchema: CollectionSchema = {
 }
 
 /**
- * Best verified score per user per board. Upserted by the run actions with id
- * `${board}:${userId}`. Boards: `daily:<date>` and `free:<cityId>:<weather>`.
+ * Best verified score per player per board. Upserted by the run actions with id
+ * `${board}:${userId}`. Boards: 'alltime' (one row per player), `daily:<date>`,
+ * `free:<cityId>:<weather>`.
+ *
+ * Named 'scores', not 'leaderboard': the first version of this table had
+ * uniqueOn [date, userId], and the SDK only ever ADDS unique indexes (CREATE
+ * UNIQUE INDEX IF NOT EXISTS), never drops one, so the old rule kept rejecting
+ * a second board row on the same day. A fresh table carries only the right rule.
  */
 export const leaderboardSchema: CollectionSchema = {
-  name: 'leaderboard',
+  name: 'scores',
   columns: [
     { name: 'board', storage: 'text', interpretation: 'plain' },
     { name: 'date', storage: 'text', interpretation: 'plain', required: true },

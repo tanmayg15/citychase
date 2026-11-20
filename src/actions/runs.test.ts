@@ -66,7 +66,7 @@ describe('submitRun', () => {
     const expected = replay(buildConfig({ cityId: s.cityId, seed: s.seed, weather: stored.weather, plan: stored.plan }), log())
     expect(row.score).toBe(expected.score)
     expect(row.status).toBe('verified')
-    expect(db.get("leaderboard")!.get(`daily:${row.date}:alice`)).toMatchObject({ score: expected.score, runId: s.runId })
+    expect(db.get('scores')!.get(`daily:${row.date}:alice`)).toMatchObject({ score: expected.score, runId: s.runId })
   })
 
   it('rejects a replayed request (same run submitted twice)', async () => {
@@ -119,7 +119,7 @@ describe('submitRun', () => {
       const r = await submitRun(ctx('alice', { runId: s.runId, inputLog: log(seed) }))
       if (r.success) scores.push((r.data as { score: number }).score)
     }
-    const lb = [...db.get('leaderboard')!.values()].filter((r) => r.board !== 'alltime')
+    const lb = [...db.get('scores')!.values()].filter((r) => r.board !== 'alltime')
     expect(lb).toHaveLength(1)
     expect(lb[0].score).toBe(Math.max(...scores))
   })

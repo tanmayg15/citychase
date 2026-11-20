@@ -15,7 +15,7 @@ export interface LeaderRow {
 
 /** Board ids: 'alltime' (one row per player), `daily:<date>`, `free:<city>:<weather>`. Server-written only. */
 export function useBoard(board: string) {
-  return useQuery<LeaderRow>('leaderboard', { where: { board }, orderBy: 'score', orderDir: 'desc', limit: 500 })
+  return useQuery<LeaderRow>('scores', { where: { board }, orderBy: 'score', orderDir: 'desc', limit: 500 })
 }
 
 /** 1-based "top N%" for a score among a board's entries. */

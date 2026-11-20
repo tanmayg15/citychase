@@ -64,3 +64,8 @@ Weather cap check: 336 calls/day × $0.00195 ≈ $0.66/day at the cap. Emails at
 - Weather lookup uses `q: "<City>,<CC>"`. The endpoint's input schema has only `location` / `q` / `units`, with no lat/lon.
 - Mock weather is varied per city on purpose (Tokyo rain, London wind, Mumbai heat, SF fog and wind…), so every rule can be tested without spending.
 - Dev server: after adding pages, `node_modules/.vite` kept a stale pre-bundled route list, so every `(app)` page showed 404. `rm -rf node_modules/.vite` and a restart fixed it.
+
+## Docs vs reality: changing `uniqueOn` (2026-11-20)
+- The SDK applies `uniqueOn` with `CREATE UNIQUE INDEX IF NOT EXISTS` (node_modules/deepspace/dist/worker.js) and never drops an index. Changing `uniqueOn` on an existing collection therefore **adds** the new rule and **keeps the old one**. Our `leaderboard` table went from [date, userId] to [board, userId]; the old index then rejected a player's second board row on the same day ("UNIQUE constraint failed: c_leaderboard.col_date, c_leaderboard.col_userid", HTTP 500 on guest submit).
+- Fix: moved to a fresh collection `scores` with only [board, userId]. The old `leaderboard` table (dev/test rows only) is left unused. The test stand-in now enforces `uniqueOn` from the real schemas, so this class of bug fails in unit tests.
+- Worth reporting to DeepSpace: the "add a field without losing data" guide doesn't mention that a changed `uniqueOn` keeps the old index.

@@ -352,3 +352,10 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 - Tanmay asked: Free play box bottom-left above the ticker so the 3D background shows more; "Quit to lobby" icon looked bad and should just say Quit; Drive button still not good.
 - Agent did: the left column puts Today's heist on top and Free play at the bottom (measured at 1440×900: Free play bottom 844 px, ticker top 863 px, no page scroll). Drive is now a full-width solid cyan bar ("▶ DRIVE NEW YORK" + district · weather), matching the orange "Play today's heist" button. Pause/end buttons use small SVG line icons (Restart, Quit) instead of text glyphs; the label is just "Quit". Checked in the browser.
 - Deployed together with the all-time leaderboard and pause/Drive restyle (commit 2d3d047) after Tanmay asked to "deploy all together".
+
+## Bug: "Request failed (500)" after a run; Home option on the end screen (2026-11-20)
+- **Tanmay reported** a 500 on the end screen (the run was verified and the board row shown, but saving failed) and asked where the Home option is.
+- **Agent did:** read the logs first. Live logs showed no failing guest submit (Tanmay's run was on the local dev server in the browser pane); the local server log had `UNIQUE constraint failed: c_leaderboard.col_date, c_leaderboard.col_userid`. Hypothesis: the old `uniqueOn [date, userId]` index survived the switch to `[board, userId]`. Confirmed in the SDK source (indexes are only ever created, never dropped). **This also affects the live site.**
+- **Fix:** moved the leaderboard to a fresh `scores` collection. The test stand-in now enforces real `uniqueOn` rules. Regression tests: the same player on the same day saves to two boards plus all-time; the schema declares only [board, userId]. 166 tests pass. Verified end to end on the local server: a Paris run after the NYC run (exactly the failing case) → "Verified by server replay", no error.
+- **Home:** the end screen now has a **Home** button (house icon) and a "← Lobby" link top-left.
+- Old `leaderboard` rows (dev/test data) are not carried over.

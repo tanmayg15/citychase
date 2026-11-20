@@ -1,5 +1,6 @@
 /** In-memory stand-in for deepspace/worker ActionTools (same method shapes). Test-only. */
 import type { ActionTools } from 'deepspace/worker'
+import { schemas } from '../schemas'
 
 export type Row = Record<string, unknown>
 export type Db = Map<string, Map<string, Row>>
@@ -15,6 +16,16 @@ export function fakeTools(db: Db, opts: FakeOpts = {}): ActionTools {
   const tools = {
     async create(c: string, data: Row, id?: string) {
       const key = id ?? `rec_${c}_${coll(c).size}_${++nextId}`
+      // Enforce uniqueOn like the real Durable Object does (another record with the same tuple → refused).
+      const unique = schemas.find((x) => x.name === c)?.uniqueOn
+      if (unique) {
+        const merged = { ...(coll(c).get(key) ?? {}), ...data }
+        for (const [otherKey, other] of coll(c)) {
+          if (otherKey !== key && unique.every((f) => other[f] === merged[f])) {
+            return { success: false, error: `Duplicate: ${unique.join(', ')} in ${c}` }
+          }
+        }
+      }
       coll(c).set(key, { ...(coll(c).get(key) ?? {}), ...structuredClone(data) })
       return { success: true, data: { recordId: key } }
     },

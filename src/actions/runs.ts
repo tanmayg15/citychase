@@ -153,15 +153,15 @@ async function verifyAndRecord(
   if (!saved.success) return saved
 
   // Who is #1 on this board right now (for the "you lost #1" email alert)?
-  const top = await tools.query('leaderboard', { where: { board: run.board }, orderBy: 'score', orderDir: 'desc', limit: 1 })
+  const top = await tools.query('scores', { where: { board: run.board }, orderBy: 'score', orderDir: 'desc', limit: 1 })
   const leader = top.success ? (top.data.records[0]?.data as unknown as { userId: string; score: number } | undefined) : undefined
 
   // Best score per user per board.
   const lbId = `${run.board}:${userId}`
-  const prev = await tools.get('leaderboard', lbId)
+  const prev = await tools.get('scores', lbId)
   const prevScore = prev.success ? (prev.data.record.data as unknown as LeaderRow).score : -1
   if (end.score > prevScore) {
-    const lb = await tools.create('leaderboard', {
+    const lb = await tools.create('scores', {
       board: run.board, date: run.date, cityId: run.cityId, userId,
       name: nameOverride ?? await displayName(tools, userId), score: end.score, runId, guest: userId.startsWith('guest_'),
     }, lbId)
@@ -176,10 +176,10 @@ async function verifyAndRecord(
   }
   // All-time board: exactly one row per player (guest or signed in), replaced only by a higher score.
   const atId = `${ALL_TIME_BOARD}:${userId}`
-  const at = await tools.get('leaderboard', atId)
+  const at = await tools.get('scores', atId)
   const atScore = at.success ? (at.data.record.data as unknown as LeaderRow).score : -1
   if (end.score > atScore) {
-    await tools.create('leaderboard', {
+    await tools.create('scores', {
       board: ALL_TIME_BOARD, date: run.date, cityId: run.cityId, userId,
       name: nameOverride ?? await displayName(tools, userId), score: end.score, runId, guest: userId.startsWith('guest_'),
     }, atId)
@@ -286,17 +286,17 @@ export const claimGuest: ActionHandler<Env> = async ({ userId, params, tools, en
   if (!guest) return fail('Invalid guest identity')
   const guestUser = `guest_${guest.guestId}`
   const name = await displayName(tools, userId)
-  const rows = await tools.query('leaderboard', { where: { userId: guestUser }, limit: 500 })
+  const rows = await tools.query('scores', { where: { userId: guestUser }, limit: 500 })
   if (!rows.success) return rows
   let moved = 0
   for (const r of rows.data.records) {
     const g = r.data as unknown as LeaderRow & { board: string; date: string; cityId: string; runId: string }
-    const mine = await tools.get('leaderboard', `${g.board}:${userId}`)
+    const mine = await tools.get('scores', `${g.board}:${userId}`)
     const myScore = mine.success ? (mine.data.record.data as unknown as LeaderRow).score : -1
     if (g.score > myScore) {
-      await tools.create('leaderboard', { ...g, userId, name, guest: false }, `${g.board}:${userId}`)
+      await tools.create('scores', { ...g, userId, name, guest: false }, `${g.board}:${userId}`)
     }
-    await tools.remove('leaderboard', r.recordId)
+    await tools.remove('scores', r.recordId)
     moved++
   }
   const runs = await tools.query('runs', { where: { userId: guestUser }, limit: 500 })

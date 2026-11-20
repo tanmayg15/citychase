@@ -46,7 +46,7 @@ describe('guest play', () => {
     const g = await start()
     const r = await claim('alice', await aged(g.ticket), log())
     expect(r.success).toBe(true)
-    expect(db.get('leaderboard')!.get(`${g.board}:alice`)).toBeTruthy()
+    expect(db.get('scores')!.get(`${g.board}:alice`)).toBeTruthy()
   })
 
   it('a ticket can be claimed only once', async () => {
@@ -106,7 +106,7 @@ describe('guest leaderboard', () => {
     const g = await guestRun()
     const r = await guestSubmit(env, tools(), { ticket: g.ticket, inputLog: log(), ...g.guest }, '1.2.3.4')
     expect(r.success).toBe(true)
-    const row = db.get('leaderboard')!.get(`${g.board}:guest_${g.guest.guestId}`)!
+    const row = db.get('scores')!.get(`${g.board}:guest_${g.guest.guestId}`)!
     expect(row).toMatchObject({ name: g.guest.guestName, guest: true })
     expect(g.guest.guestName).toMatch(/^Guest \d{4}$/)
   })
@@ -136,11 +136,11 @@ describe('guest leaderboard', () => {
   it('signing in moves guest scores to the account, keeping the best per board', async () => {
     const g = await guestRun()
     await guestSubmit(env, tools(), { ticket: g.ticket, inputLog: log(), ...g.guest }, 'ip')
-    const guestRow = db.get('leaderboard')!.get(`${g.board}:guest_${g.guest.guestId}`)!
+    const guestRow = db.get('scores')!.get(`${g.board}:guest_${g.guest.guestId}`)!
     const r = await claimGuest({ userId: 'alice', params: { ...g.guest }, tools: tools(), env: env as never, callerJwt: 'x' })
     expect(r).toMatchObject({ success: true, data: { moved: 2 } }) // its board row + its all-time row
-    expect(db.get('leaderboard')!.get(`${g.board}:guest_${g.guest.guestId}`)).toBeUndefined()
-    expect(db.get('leaderboard')!.get(`${g.board}:alice`)).toMatchObject({ score: guestRow.score, userId: 'alice', guest: false })
+    expect(db.get('scores')!.get(`${g.board}:guest_${g.guest.guestId}`)).toBeUndefined()
+    expect(db.get('scores')!.get(`${g.board}:alice`)).toMatchObject({ score: guestRow.score, userId: 'alice', guest: false })
     const run = db.get('runs')!.get(guestRow.runId as string)!
     expect(run.userId).toBe('alice')
   })
@@ -165,7 +165,7 @@ describe('all-time board (one row per player)', () => {
     const id = { guestId: first.guest.guestId, guestToken: first.guest.guestToken }
     const scores = []
     for (const seed of [1, 2, 3, 4]) scores.push((await play(id, seed)).score)
-    const rows = [...db.get('leaderboard')!.entries()].filter(([k]) => k.startsWith('alltime:'))
+    const rows = [...db.get('scores')!.entries()].filter(([k]) => k.startsWith('alltime:'))
     expect(rows).toHaveLength(1)
     expect(rows[0][1].score).toBe(Math.max(...scores))
   })
@@ -175,10 +175,32 @@ describe('all-time board (one row per player)', () => {
     const first = await start()
     const id = { guestId: first.guest.guestId, guestToken: first.guest.guestToken }
     const { score } = await play(id, 7)
-    db.get('leaderboard')!.set('alltime:alice', { board: 'alltime', userId: 'alice', name: 'Alice', score: score - 1 })
+    db.get('scores')!.set('alltime:alice', { board: 'alltime', userId: 'alice', name: 'Alice', score: score - 1 })
     await claimGuest({ userId: 'alice', params: { ...id }, tools: tools(), env: env as never, callerJwt: 'x' })
-    const all = [...db.get('leaderboard')!.entries()].filter(([k]) => k.startsWith('alltime:'))
+    const all = [...db.get('scores')!.entries()].filter(([k]) => k.startsWith('alltime:'))
     expect(all).toHaveLength(1)
     expect(all[0][1]).toMatchObject({ userId: 'alice', name: 'Alice', score, guest: false })
+  })
+})
+
+describe('regression: same player, same day, several boards', () => {
+  it('a run saves both its board row and the all-time row (old [date,userId] rule broke this)', async () => {
+    const g = await start({ mode: 'free', cityId: 'nyc-midtown', weather: 'live' })
+    const r = await guestSubmit(env, tools(), { ticket: await aged(g.ticket), inputLog: log(), ...g.guest }, 'ip')
+    expect(r.success).toBe(true)
+    const keys = [...db.get('scores')!.keys()]
+    expect(keys).toContain(`free:nyc-midtown:live:guest_${g.guest.guestId}`)
+    expect(keys).toContain(`alltime:guest_${g.guest.guestId}`)
+    // A second board on the same day for the same player also works.
+    const g2 = await start({ mode: 'free', cityId: 'paris-marais', weather: 'rain', guestId: g.guest.guestId, guestToken: g.guest.guestToken })
+    const r2 = await guestSubmit(env, tools(), { ticket: await aged(g2.ticket), inputLog: log(2), ...g2.guest }, 'ip')
+    expect(r2.success).toBe(true)
+    expect([...db.get('scores')!.keys()]).toContain(`free:paris-marais:rain:guest_${g.guest.guestId}`)
+  })
+
+  it('the scores table only declares the [board, userId] rule', async () => {
+    const { leaderboardSchema } = await import('../schemas/game-schemas')
+    expect(leaderboardSchema.name).toBe('scores')
+    expect(leaderboardSchema.uniqueOn).toEqual(['board', 'userId'])
   })
 })
