@@ -28,6 +28,8 @@ import { alertKnockedOff } from './media'
 import { cachedWeather, resolveWeather } from './weather'
 
 export const MAX_RUNS_PER_DAY = 40
+/** One row per player: their best score ever, from any mode. */
+export const ALL_TIME_BOARD = 'alltime'
 /** Submitting must take at least this share of the game's real duration. */
 const MIN_REALTIME_RATIO = 0.9
 const MAX_RUN_AGE_MS = 15 * 60 * 1000
@@ -172,6 +174,17 @@ async function verifyAndRecord(
       })
     }
   }
+  // All-time board: exactly one row per player (guest or signed in), replaced only by a higher score.
+  const atId = `${ALL_TIME_BOARD}:${userId}`
+  const at = await tools.get('leaderboard', atId)
+  const atScore = at.success ? (at.data.record.data as unknown as LeaderRow).score : -1
+  if (end.score > atScore) {
+    await tools.create('leaderboard', {
+      board: ALL_TIME_BOARD, date: run.date, cityId: run.cityId, userId,
+      name: nameOverride ?? await displayName(tools, userId), score: end.score, runId, guest: userId.startsWith('guest_'),
+    }, atId)
+  }
+
   return {
     success: true,
     data: {

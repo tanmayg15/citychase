@@ -38,7 +38,7 @@ export default function Lobby() {
   const dailyCity = getCity(daily.cityId)!
   const [cityId, setCityId] = useState(CITY_MAZES[0].id)
   const [weather, setWeather] = useState<WeatherPreset>('live')
-  const [board, setBoard] = useState<'daily' | 'free'>('daily')
+  const [board, setBoard] = useState<'alltime' | 'daily' | 'free'>('alltime')
   const [guestName, setGuestName] = useState<string | null>(null)
   useEffect(() => setGuestName(loadGuest()?.guestName ?? null), [])
 
@@ -160,9 +160,13 @@ export default function Lobby() {
               <button
                 onClick={() => go(`/play?mode=free&city=${encodeURIComponent(cityId)}&weather=${weather}`)}
                 data-testid="play-free"
-                className="ml-auto rounded-xl bg-cyan-400 px-5 py-2.5 font-bold text-black shadow-[0_0_24px_rgba(55,245,255,0.6)] transition hover:scale-[1.03] hover:bg-cyan-300"
+                className="group ml-auto flex items-center gap-3 rounded-xl border border-cyan-300/70 bg-gradient-to-r from-cyan-500/25 to-sky-600/25 px-4 py-2 text-left shadow-[0_0_22px_rgba(55,245,255,0.35)] transition hover:scale-[1.03] hover:border-cyan-200 hover:shadow-[0_0_30px_rgba(55,245,255,0.6)]"
               >
-                ▶ Drive {pick.city}: {pick.name}
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-300 text-sm text-black shadow-[0_0_14px_#37f5ff]">▶</span>
+                <span className="leading-tight">
+                  <span className="block text-sm font-black tracking-wider text-cyan-100">DRIVE</span>
+                  <span className="block text-xs text-white/70">{pick.city} · {pick.name} · {WEATHER_LABEL[weather]}</span>
+                </span>
               </button>
             </div>
           </section>
@@ -170,14 +174,16 @@ export default function Lobby() {
 
         {/* Leaderboard */}
         <aside className={`${panel} flex h-fit max-h-full min-h-0 flex-col p-5`}>
-          <div className="mb-3 flex gap-2 text-sm">
+          <p className="mb-2 text-xs uppercase tracking-[0.25em] text-white/50">Leaderboard</p>
+          <div className="mb-3 flex gap-1.5 text-sm">
+            <button onClick={() => setBoard('alltime')} data-testid="board-alltime" className={`rounded-full px-3 py-1 ${board === 'alltime' ? 'bg-white/20' : 'text-white/60'}`}>All-time</button>
             <button onClick={() => setBoard('daily')} className={`rounded-full px-3 py-1 ${board === 'daily' ? 'bg-white/20' : 'text-white/60'}`}>Today</button>
             <button onClick={() => setBoard('free')} className={`truncate rounded-full px-3 py-1 ${board === 'free' ? 'bg-white/20' : 'text-white/60'}`}>
               {pick.city} · {WEATHER_LABEL[weather]}
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
-            <Leaderboard board={board === 'daily' ? `daily:${daily.date}` : `free:${cityId}:${weather}`} limit={9} />
+            <Leaderboard board={board === 'alltime' ? 'alltime' : board === 'daily' ? `daily:${daily.date}` : `free:${cityId}:${weather}`} limit={10} />
           </div>
         </aside>
       </main>

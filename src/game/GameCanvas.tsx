@@ -26,6 +26,10 @@ const MINIMAP_TILE = 6
 
 export type View = '3d' | '2d'
 
+function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="rounded border border-white/25 bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-white/80">{children}</kbd>
+}
+
 const KEYS: Record<string, Dir> = {
   ArrowUp: Dir.Up, ArrowRight: Dir.Right, ArrowDown: Dir.Down, ArrowLeft: Dir.Left,
   w: Dir.Up, d: Dir.Right, s: Dir.Down, a: Dir.Left,
@@ -106,8 +110,9 @@ export function GameCanvas({
   const [mode, setMode] = useState<View>(view)
   const [box, setBox] = useState({ w: 800, h: 520 })
   const boxRef = useRef(box)
-  const cb = useRef({ onHud, onEnd })
-  cb.current = { onHud, onEnd }
+  const lastHud = useRef<Hud | null>(null)
+  const cb = useRef({ onHud: (h: Hud) => { lastHud.current = h; onHud(h) }, onEnd })
+  cb.current = { onHud: (h: Hud) => { lastHud.current = h; onHud(h) }, onEnd }
 
   useEffect(() => setMode(view), [view])
   // Audio is shared across games: unlock it on any gesture, silence it on unmount.
@@ -342,9 +347,11 @@ export function GameCanvas({
     else if (ui === 'paused') { setUiBoth('running'); sfx.current?.resume(); sfx.current?.setPaused(false) }
   }
   const toggleMute = () => { const m = !muted; setMuted(m); sfx.current?.setMuted(m) }
-  const btn = 'rounded-lg px-5 py-2.5 font-bold'
-  const primary = `${btn} bg-cyan-400 text-black shadow-[0_0_18px_#37f5ff] hover:bg-cyan-300`
-  const secondary = `${btn} border border-white/30 text-white hover:bg-white/10`
+  const btn = 'rounded-xl px-6 py-3 font-bold transition hover:scale-[1.03]'
+  const primary = `${btn} bg-orange-500 text-black shadow-[0_0_28px_rgba(255,138,31,0.6)] hover:bg-orange-400`
+  const secondary = `${btn} border border-white/20 bg-white/5 text-white hover:bg-white/10`
+  const card = 'w-[min(92vw,460px)] rounded-3xl border border-white/15 bg-black/60 px-8 py-7 text-center shadow-2xl'
+  const snap = lastHud.current
 
   const overlays = (
     <>
@@ -359,34 +366,51 @@ export function GameCanvas({
         </button>
       </div>
       {ui !== 'running' && !(ui === 'ended' && !showEndScreen) && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 rounded-xl bg-black/65 text-center text-white backdrop-blur-sm" data-testid={`screen-${ui}`}>
+        <div className={`absolute inset-0 z-20 flex items-center justify-center bg-black/55 text-white backdrop-blur-md ${fill ? '' : 'rounded-xl'}`} data-testid={`screen-${ui}`}>
           {ui === 'ready' && (
-            <>
-              <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-300">City Chase</p>
-              <h2 className="text-3xl font-black" style={{ textShadow: '0 0 18px #37f5ff' }}>Ready for the heist?</h2>
-              <p className="max-w-sm text-sm opacity-80">Arrows / WASD / swipe to drive. Esc or P pauses.</p>
-              <button onClick={start} className={primary} data-testid="start-button">Start</button>
-            </>
+            <div className={card}>
+              <p className="text-[11px] uppercase tracking-[0.35em] text-orange-300">City Chase</p>
+              <h2 className="mt-2 text-4xl font-black" style={{ textShadow: '0 0 24px rgba(255,138,31,0.6)' }}>Ready for the heist?</h2>
+              <p className="mt-2 text-sm text-white/70">Grab the loot, reach the safehouse, stay out of the headlights.</p>
+              <button onClick={start} className={`${primary} mt-6 w-full text-lg`} data-testid="start-button">▶ Start</button>
+              <p className="mt-4 text-xs text-white/45"><Kbd>←↑↓→</Kbd> / <Kbd>WASD</Kbd> / swipe to drive · <Kbd>Esc</Kbd> pauses</p>
+            </div>
           )}
           {ui === 'paused' && (
-            <>
-              <h2 className="text-3xl font-black">Paused</h2>
-              <div className="flex gap-3">
-                <button onClick={togglePause} className={primary} data-testid="resume-button">Resume</button>
-                {onRestart && <button onClick={onRestart} className={secondary} data-testid="restart-button">Restart</button>}
-                {onQuit && <button onClick={onQuit} className={secondary} data-testid="quit-button">Quit</button>}
+            <div className={card}>
+              <p className="text-[11px] uppercase tracking-[0.35em] text-orange-300">Heist on hold</p>
+              <h2 className="mt-1 text-5xl font-black tracking-tight" style={{ textShadow: '0 0 24px rgba(255,138,31,0.6)' }}>PAUSED</h2>
+              {snap && (
+                <div className="mt-5 grid grid-cols-3 gap-2">
+                  {[
+                    { k: 'Score', v: snap.score.toLocaleString('en-US') },
+                    { k: 'Loot', v: `${snap.lootTaken}/${snap.lootTotal}` },
+                    { k: 'Time left', v: `${Math.floor(snap.secondsLeft / 60)}:${String(snap.secondsLeft % 60).padStart(2, '0')}` },
+                  ].map((t) => (
+                    <div key={t.k} className="rounded-2xl border border-white/10 bg-white/5 py-2.5">
+                      <p className="font-mono text-lg font-bold tabular-nums">{t.v}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-white/45">{t.k}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button onClick={togglePause} className={`${primary} mt-6 w-full text-lg`} data-testid="resume-button">▶ Resume</button>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {onRestart && <button onClick={onRestart} className={secondary} data-testid="restart-button">↻ Restart</button>}
+                {onQuit && <button onClick={onQuit} className={secondary} data-testid="quit-button">⌂ Quit to lobby</button>}
               </div>
-            </>
+              <p className="mt-4 text-xs text-white/45"><Kbd>Esc</Kbd> or <Kbd>P</Kbd> to resume</p>
+            </div>
           )}
           {ui === 'ended' && final && (
-            <>
-              <h2 className="text-3xl font-black">{OUTCOME[final.status] ?? final.status}</h2>
-              <p className="font-mono">{final.score.toLocaleString('en-US')} pts · {final.loot} loot</p>
-              <div className="flex gap-3">
-                {onRestart && <button onClick={onRestart} className={primary} data-testid="again-button">Play again</button>}
-                {onQuit && <button onClick={onQuit} className={secondary} data-testid="quit-button">Quit</button>}
+            <div className={card}>
+              <h2 className="text-4xl font-black" style={{ textShadow: '0 0 24px rgba(255,138,31,0.6)' }}>{OUTCOME[final.status] ?? final.status}</h2>
+              <p className="mt-2 font-mono text-2xl">{final.score.toLocaleString('en-US')} pts · {final.loot} loot</p>
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                {onRestart && <button onClick={onRestart} className={primary} data-testid="again-button">▶ Play again</button>}
+                {onQuit && <button onClick={onQuit} className={secondary} data-testid="quit-button">⌂ Lobby</button>}
               </div>
-            </>
+            </div>
           )}
         </div>
       )}

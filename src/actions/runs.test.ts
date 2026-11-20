@@ -119,7 +119,7 @@ describe('submitRun', () => {
       const r = await submitRun(ctx('alice', { runId: s.runId, inputLog: log(seed) }))
       if (r.success) scores.push((r.data as { score: number }).score)
     }
-    const lb = [...db.get('leaderboard')!.values()]
+    const lb = [...db.get('leaderboard')!.values()].filter((r) => r.board !== 'alltime')
     expect(lb).toHaveLength(1)
     expect(lb[0].score).toBe(Math.max(...scores))
   })

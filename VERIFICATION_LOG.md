@@ -331,3 +331,19 @@ The task suggests ≥ 3 DeepSpace integrations; after dropping Claude/email the 
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## All-time leaderboard, pause screen, Drive button (2026-11-20)
+
+### Tanmay asked
+A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your own score, one row per player (guest or signed in), updated only on a new best, and the guest row renamed and tied to the account on sign-in. Also: the pause screen and Drive button don't match the aesthetics; guest/user scores weren't showing in the lobby panel.
+
+### Agent did / decided
+- **Kept the DeepSpace records database** instead of a file: Workers have no writable disk, a file would lose concurrent writes, and the grading asks for platform primitives. Explained this to Tanmay.
+- **All-time board** (`board = 'alltime'`): exactly one row per player (`alltime:<userId>` for accounts, `alltime:guest_<id>` for guests), replaced only by a higher verified score from any mode. On sign-in `claimGuest` moves the row to the account, renames it to the account name and keeps the higher score (tested).
+- **Why scores weren't showing:** the lobby defaulted to *Today* (daily runs only) while Tanmay's runs were Free Play. The lobby now defaults to **All-time**.
+- **Leaderboard UI:** top 10 with 🥇🥈🥉, a GUEST tag, "(you)" highlight for the account *or* this browser's guest identity, your own row and rank pinned underneath when you're outside the top 10, and a player count.
+- **Pause / start / end screens** redesigned as glass cards matching the lobby and end screen (orange headline, run snapshot on pause, keyboard hints). **Drive button** redesigned as a neon-edged glass button with a play disc and a "DRIVE / city · district · weather" label.
+- Tests: 164 pass (2 new for the all-time rules). Browser: lobby (All-time default, new Drive button), the NYC board shows "🥇 Guest 7093 (you) GUEST 5,104", and the new pause card.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_

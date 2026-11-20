@@ -138,7 +138,7 @@ describe('guest leaderboard', () => {
     await guestSubmit(env, tools(), { ticket: g.ticket, inputLog: log(), ...g.guest }, 'ip')
     const guestRow = db.get('leaderboard')!.get(`${g.board}:guest_${g.guest.guestId}`)!
     const r = await claimGuest({ userId: 'alice', params: { ...g.guest }, tools: tools(), env: env as never, callerJwt: 'x' })
-    expect(r).toMatchObject({ success: true, data: { moved: 1 } })
+    expect(r).toMatchObject({ success: true, data: { moved: 2 } }) // its board row + its all-time row
     expect(db.get('leaderboard')!.get(`${g.board}:guest_${g.guest.guestId}`)).toBeUndefined()
     expect(db.get('leaderboard')!.get(`${g.board}:alice`)).toMatchObject({ score: guestRow.score, userId: 'alice', guest: false })
     const run = db.get('runs')!.get(guestRow.runId as string)!
@@ -148,5 +148,37 @@ describe('guest leaderboard', () => {
   it('claiming with a forged identity does nothing', async () => {
     const r = await claimGuest({ userId: 'mallory', params: { guestId: 'abc', guestToken: 'f'.repeat(32) }, tools: tools(), env: env as never, callerJwt: 'x' })
     expect(r.success).toBe(false)
+  })
+})
+
+describe('all-time board (one row per player)', () => {
+  async function play(guest: { guestId: string; guestToken: string }, seed: number) {
+    const g = await start({ ...guest })
+    const t = await aged(g.ticket)
+    const r = await guestSubmit(env, tools(), { ticket: t, inputLog: log(seed), ...g.guest }, 'ip')
+    if (!r.success) throw new Error(r.error)
+    return { g, score: (r.data as unknown as { score: number }).score }
+  }
+
+  it('keeps exactly one all-time row per guest, holding their best score', async () => {
+    const first = await start()
+    const id = { guestId: first.guest.guestId, guestToken: first.guest.guestToken }
+    const scores = []
+    for (const seed of [1, 2, 3, 4]) scores.push((await play(id, seed)).score)
+    const rows = [...db.get('leaderboard')!.entries()].filter(([k]) => k.startsWith('alltime:'))
+    expect(rows).toHaveLength(1)
+    expect(rows[0][1].score).toBe(Math.max(...scores))
+  })
+
+  it('on sign-in the all-time row becomes the account name with the better of the two scores', async () => {
+    db.set('users', new Map([['alice', { name: 'Alice' }]]))
+    const first = await start()
+    const id = { guestId: first.guest.guestId, guestToken: first.guest.guestToken }
+    const { score } = await play(id, 7)
+    db.get('leaderboard')!.set('alltime:alice', { board: 'alltime', userId: 'alice', name: 'Alice', score: score - 1 })
+    await claimGuest({ userId: 'alice', params: { ...id }, tools: tools(), env: env as never, callerJwt: 'x' })
+    const all = [...db.get('leaderboard')!.entries()].filter(([k]) => k.startsWith('alltime:'))
+    expect(all).toHaveLength(1)
+    expect(all[0][1]).toMatchObject({ userId: 'alice', name: 'Alice', score, guest: false })
   })
 })
