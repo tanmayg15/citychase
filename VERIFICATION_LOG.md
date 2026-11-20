@@ -226,3 +226,19 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Live mode switch, 2026-11-20
+
+### Agent did
+- Replaced the solid safehouse "garage" (it stood on a drivable road tile, so the car drove through it; Tanmay's screenshot) with a flat road pad: red hatching when locked, green beacon and ring when open. Checked in Paris, where the safehouse is visible from the start.
+- **After Tanmay said "make it live":** set `INTEGRATIONS_MODE = "live"` in `wrangler.toml` `[vars]`, committed, pushed and deployed.
+- Live checks after the deploy: all pages return 200; a direct browser call to `openweathermap/current` → **403**; `getWeather` without sign-in → **401**; `deepspace app usage` still shows **374/500 credits**, so nothing was spent by the switch itself.
+
+### Needs Tanmay (CP4 live test)
+1. Sign in and open `/ops`. It should show mode **live** and the kill switch **OFF** (the default).
+2. Turn integrations **ON**, then play one daily run. The HUD should show real weather for today's city (no "demo weather" badge), and `/ops` should show weather 1.
+3. Run `npx deepspace app usage`: openweathermap should be up by 1 call (about $0.002).
+4. Optional: turn it OFF again and check the next run uses the last live weather (marked "last known weather") with no new calls.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
