@@ -198,3 +198,22 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Feedback round 3: "bug: car stuck in the wall", "sound effects", "start, pause and end options", 2026-11-20
+
+### Agent did
+- **"Car stuck in the wall."** Checked the hypothesis before changing code: a throwaway test stepped every city in clear and rain/wind weather for **309,247 ticks** and asserted that no car is ever on a building tile. It passed, so the engine was fine and the bug was visual. Cause: the camera clamp pushed the car to the screen edge, where it was seen at a shallow angle behind tall blocks. Fix: the camera clamps much less near map edges, and cars hidden behind buildings show as **x-ray outlines** (orange for you, blue for cops), drawn only where occluded (reversed depth test).
+- **Sound** (`src/game/sound.ts`): all generated with the Web Audio API, so no audio files or licences. Engine hum that rises when moving, a two-tone siren while any cop chases, a loot chime, a smoke whoosh, a "spotted" stinger, a crash when caught, a safehouse-open arpeggio, escape and busted jingles, and countdown beeps. Mute toggle remembered per browser. Audio starts only after a user gesture (browser rule) and is suspended while paused.
+- **Start / pause / end:**
+  - Practice shows a **Start** screen (button or Enter/Space).
+  - **Pause** with the button or Esc/P. The pause menu has Resume / Restart / Quit; game time and the countdown freeze, wall time doesn't.
+  - Practice shows an **end screen** (outcome, points, loot, Play again / Quit). The daily run keeps its existing verified-result screen and gains pause, Restart (starts a new run) and Quit.
+- Checked in the browser: Start screen → Start → drive → P pauses (timer frozen at 177s over 3 s) → Esc resumes. No console errors. Tests pass.
+
+### Not verified / known gaps
+- I can't hear audio through the automated browser. **Tanmay needs to check the sounds by ear.**
+- End screen not triggered in the browser test (same code path as the outcome state; covered by reading only).
+- **Design note:** pausing gives thinking time in the daily mode. The server realtime check only needs elapsed ≥ 0.9 × game time, so pausing is allowed, but a run must still be submitted within 15 minutes of starting. Quitting a daily run leaves it unsubmitted, and it counts toward the 40/day cap.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
