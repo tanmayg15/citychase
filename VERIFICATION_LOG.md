@@ -73,3 +73,40 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Phase 3: Solo Daily City and verified scores
+
+### Agent did
+- Read the DeepSpace docs before writing server code: server actions guide and reference, permissions, schemas, records, client auth.
+- **Schemas** (`src/schemas/game-schemas.ts`):
+  - `runs` uses `create/update/delete: false` for every role, so only server actions write. Read is `'published'` with `visibilityField status = verified`: verified runs are public (for Ghost Races), other runs are owner-only (`ownerField: userId`).
+  - `leaderboard` is readable by everyone, server-write only, with `uniqueOn [date, userId]`.
+- **Server actions** (`src/actions/runs.ts`):
+  - `startRun`: the server picks today's city, mints a random per-attempt salt, stores a `started` run with weather and plan, and caps runs at 40 per user per day.
+  - `submitRun`: the client sends only `{runId, inputLog}`. The server checks ownership, rejects a second submission, checks the engine version, validates the log (≤ 64 KB), **replays it with the stored seed/weather/plan**, rejects runs that finished faster than 0.9 × game time or are older than 15 min, then writes the verified score and upserts the best score per user per day. It logs `replayMs` for the CPU measurement.
+- **Client**:
+  - `src/game/renderer.ts`: neon canvas, with an original arrowhead "runner" and visor "drones", interpolated motion, and a night vision mask.
+  - `src/game/GameCanvas.tsx`: fixed 20 Hz ticks on rAF, frame gaps clamped to 250 ms so the game slows instead of skipping, arrows/WASD/swipe, and an input log built through the same `step()` the server uses. Resizing does not restart the game.
+  - `/home`: today's city, local time, leaderboard.
+  - `/play` (sign-in required): start → 3 s countdown with taunt → play → verify → result, share string, leaderboard.
+  - `/dev/play`: unverified practice with a city and weather picker.
+  - Landing page copy and SEO updated.
+- **Tests:** 13 new action tests against an in-memory `ActionTools` (72 in total, all passing): the server score ignores a client-sent `score`, a replayed request is rejected, another user's run is rejected, faster-than-real-time is rejected, 4 malformed-log cases are rejected, attempts get distinct seeds, the per-day cap holds, and the leaderboard keeps the best score only.
+- **Checked in the in-app browser (local dev server):** the practice game runs (moving and eating orbs, ghosts released), night mode works, the console has no errors, `/home` loads the empty leaderboard for anonymous users, and `/play` shows the sign-in panel. `curl` against both actions with no token or a forged token returns **401**.
+
+### Not verified by the agent
+- **No signed-in end-to-end run.** That needs a real login (Tanmay) or a test account (needs Tanmay's OK to create).
+- **Worker CPU time of the replay** is not measured yet; it needs the deployed build. It's logged as `[submitRun] … replayMs=` (watch with `npx deepspace logs --follow`).
+
+### Needs human verification (CP3)
+- After the deploy (needs approval), sign in on https://citychase.app.space, play a run, and check that the verified score and leaderboard update.
+- **Try to cheat:**
+  1. Call `/api/actions/submitRun` with a fake `score`.
+  2. Edit the input log in DevTools before submitting.
+  3. Resend the same submit request.
+  4. Submit someone else's runId.
+  5. Write to `runs`/`leaderboard` directly from the browser console.
+- Approve or reject the deviations in NOTES.md: no `dailies` collection, the per-attempt salt.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
