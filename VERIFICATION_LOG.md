@@ -217,3 +217,12 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Feedback round 4: "heat, wind and clear look the same", deploy on mock, 2026-11-20
+
+### Agent did
+- First attempt (light colour, fog, a low golden sun, debris) was **still hard to tell apart** in screenshots, because the top-down camera hardly sees the sky. Second attempt added a whole-picture **colour grade** per weather (ShaderPass): clear is vivid (saturation 1.22), heat is golden-warm with a subtle **heat-shimmer wobble**, wind is desaturated and cool with bigger multi-colour leaf/paper debris and brighter dust streaks. Checked side by side in the browser: now clearly distinct.
+- After Tanmay asked: pushed and **deployed (mock mode)**. Live check: `/`, `/home`, `/play`, `/dev/play` return 200, and `/dev/play` runs in **3D** on the live site with no console errors.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
