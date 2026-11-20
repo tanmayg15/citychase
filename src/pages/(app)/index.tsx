@@ -9,11 +9,11 @@ import { AuthOverlay, signOut, useAuth, useAuthUser, useQuery } from 'deepspace'
 import { CITY_MAZES, getCity } from '@/cities'
 import { callAction, claimGuestIfAny, loadGuest } from '@/game/api'
 import { AttractScene, preloadCity } from '@/game/AttractScene'
-import { dailyFor, utcDate, weatherLabel } from '@/shared/daily'
-import { Leaderboard } from '@/game/hud/Leaderboard'
+import { dailyFor, utcDate, weatherEmoji, weatherLabel } from '@/shared/daily'
+import { Leaderboard, useMyLeaderId, type LeaderRow } from '@/game/hud/Leaderboard'
 import { getSfx } from '@/game/sound'
 import { RuleBadges } from '@/game/hud/WeatherInfo'
-import { WEATHER_PRESETS, type WeatherPreset, type WeatherRecord } from '@/shared/weather'
+import { WEATHER_PRESETS, mockWeather, type WeatherPreset, type WeatherRecord } from '@/shared/weather'
 
 const WEATHER_LABEL: Record<WeatherPreset, string> = {
   live: '📡 Live', clear: '☀️ Clear', rain: '🌧️ Rain', snow: '❄️ Snow', wind: '💨 Wind', heat: '🔥 Heat', night: '🌙 Night', fog: '🌫️ Fog',
@@ -26,6 +26,10 @@ const TICKER = [
   'Smoke-bomb sightings up 300% this week, say officials',
   'Safehouse locations change daily, say anonymous sources',
 ]
+
+function Key({ children }: { children: React.ReactNode }) {
+  return <kbd className="rounded border border-white/25 bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/85">{children}</kbd>
+}
 
 const panel = 'rounded-2xl border border-white/10 bg-black/50 backdrop-blur-md'
 
@@ -64,9 +68,21 @@ export default function Lobby() {
   const [guestName, setGuestName] = useState<string | null>(null)
   useEffect(() => setGuestName(loadGuest()?.guestName ?? null), [])
 
-  const { records } = useQuery<{ cityId: string; weather: WeatherRecord }>('weatherCache', { where: { cityId: daily.cityId } })
-  const dailyWeather = records[0]?.data.weather
-  const bgWeather = useMemo(() => dailyWeather, [dailyWeather?.fetchedAtMs])
+  // Every city's latest cached live weather; cities without one show their free mock weather,
+  // so the weather (the game's core idea) is always visible, even with paid calls off.
+  const { records: weatherRows } = useQuery<{ cityId: string; weather: WeatherRecord }>('weatherCache', { limit: 50 })
+  const [nowMs] = useState(() => Date.now())
+  const weatherOf = useMemo(() => {
+    const live = new Map(weatherRows.map((r) => [r.data.cityId, r.data.weather]))
+    return (id: string): WeatherRecord => live.get(id) ?? mockWeather(id, getCity(id)?.timezone ?? 'UTC', nowMs)
+  }, [weatherRows, nowMs])
+  const dailyWeather = weatherOf(daily.cityId)
+  const bgWeather = useMemo(() => dailyWeather, [dailyWeather.fetchedAtMs, dailyWeather.cityId])
+
+  // Returning players: their all-time best, shown next to their name.
+  const me = useMyLeaderId()
+  const { records: mine } = useQuery<LeaderRow>('scores', { where: { board: 'alltime', userId: me ?? '__none__' }, limit: 1 })
+  const myBest = me ? mine[0]?.data.score : undefined
 
   // Back from sign-in: move this browser's guest scores to the account.
   useEffect(() => { if (isSignedIn) void claimGuestIfAny() }, [isSignedIn])
@@ -100,18 +116,24 @@ export default function Lobby() {
     <div className="relative isolate flex h-screen flex-col overflow-hidden text-[#ece6ff]" data-testid="lobby">
       <AttractScene cityId={daily.cityId} weather={bgWeather} />
 
-      <header className="flex shrink-0 items-center justify-between px-5 py-3 sm:px-8">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-5 py-3 sm:px-8">
         <div className="flex items-center gap-3">
-          <span className="text-2xl font-black tracking-tight" style={{ textShadow: '0 0 18px #ff8a1f' }}>CITY CHASE</span>
+          <span className="whitespace-nowrap text-2xl font-black tracking-tight" style={{ textShadow: '0 0 18px #ff8a1f' }}>CITY CHASE</span>
           <div className="flex rounded-full bg-black/50 p-0.5 text-sm backdrop-blur" role="radiogroup" aria-label="Opponent" title="Race the ghost of the board's #1 run">
             {([[false, '🚗 Solo'], [true, '👻 Race #1 ghost']] as const).map(([on, label]) => (
               <button key={label} role="radio" aria-checked={ghost === on} onClick={() => pickGhost(on)} data-testid={on ? 'opponent-ghost' : 'opponent-solo'}
-                className={`whitespace-nowrap rounded-full px-3 py-1 ${ghost === on ? 'bg-cyan-400/30 text-white' : 'text-white/60 hover:text-white'}`}>
+                className={`whitespace-nowrap rounded-full px-3 py-1 transition ${ghost === on ? (on ? 'bg-cyan-400/40 text-white shadow-[0_0_16px_rgba(55,245,255,0.7)] ring-1 ring-cyan-300' : 'bg-white/20 text-white') : 'text-white/60 hover:text-white'}`}>
                 {label}
               </button>
             ))}
           </div>
         </div>
+        <div className="flex items-center gap-2">
+        {myBest !== undefined && (
+          <span className="hidden whitespace-nowrap rounded-full border border-amber-300/40 bg-black/50 px-3 py-1.5 text-sm backdrop-blur xl:inline" data-testid="your-best" title="Your all-time best">
+            🏆 Your best <strong className="font-mono">{myBest.toLocaleString('en-US')}</strong>
+          </span>
+        )}
         {isSignedIn ? (
           <div className="flex items-center gap-2">
             {alerts !== null && (
@@ -126,10 +148,11 @@ export default function Lobby() {
             </button>
           </div>
         ) : (
-          <button onClick={() => setSignIn(true)} className="rounded-full bg-white/10 px-3 py-1.5 text-sm backdrop-blur hover:bg-white/20" data-testid="lobby-sign-in">
+          <button onClick={() => setSignIn(true)} className="whitespace-nowrap rounded-full bg-white/10 px-3 py-1.5 text-sm backdrop-blur hover:bg-white/20" data-testid="lobby-sign-in">
             {guestName ? `${guestName} · sign in` : 'Sign in'}
           </button>
         )}
+        </div>
       </header>
 
       <main className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-5 pb-14 sm:px-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:content-stretch lg:overflow-hidden">
@@ -142,12 +165,10 @@ export default function Lobby() {
                 <h1 className="mt-1 text-3xl font-black leading-tight sm:text-4xl" style={{ textShadow: '0 0 24px rgba(255,138,31,0.6)' }}>
                   {dailyCity.name}, {dailyCity.city}
                 </h1>
-                {dailyWeather && (
-                  <div className="mt-1">
-                    <p className="text-sm text-white/75">{weatherLabel(dailyCity.city, dailyCity.timezone, dailyWeather).replace(' (mock)', '')}</p>
-                    <RuleBadges weather={dailyWeather} />
-                  </div>
-                )}
+                <div className="mt-1" data-testid="daily-weather">
+                  <p className="text-sm text-white/75">{weatherLabel(dailyCity.city, dailyCity.timezone, dailyWeather).replace(' (mock)', '')}</p>
+                  <RuleBadges weather={dailyWeather} />
+                </div>
               </div>
               <button
                 onClick={() => go(vs ? `/play?${vs}` : '/play')}
@@ -156,6 +177,13 @@ export default function Lobby() {
               >
                 ▶ PLAY TODAY'S HEIST
               </button>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-white/10 pt-3 text-xs text-white/65" data-testid="controls-strip">
+              <span><Key>←↑↓→</Key> / <Key>WASD</Key> / swipe to drive</span>
+              <span><Key>1</Key> 🔥 Nitro</span>
+              <span><Key>2</Key> 🛢️ Oil</span>
+              <span><Key>3</Key> 🎭 Disguise</span>
+              <span>💎 grab 7 loot, then reach the <strong className="text-emerald-300">H</strong></span>
             </div>
           </section>
 
@@ -174,6 +202,7 @@ export default function Lobby() {
                   title={`${c.name}, ${c.city}`}
                   className={`truncate rounded-lg border px-2.5 py-1.5 text-left text-sm transition ${cityId === c.id ? 'border-cyan-300 bg-cyan-400/20 shadow-[0_0_14px_rgba(55,245,255,0.4)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
                 >
+                  <span className="mr-1" aria-hidden>{weatherEmoji(weatherOf(c.id))}</span>
                   <span className="font-semibold">{c.city}</span>
                 </button>
               ))}

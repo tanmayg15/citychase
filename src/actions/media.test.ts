@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { KILL_SWITCH_KEY } from './guard'
-import { alertKnockedOff, cleanHeadline, getNews, getRadio, NEWS_TTL_MS, RADIO_LINES } from './media'
+import { alertKnockedOff, cleanHeadline, getNews, getRadio, NEWS_TTL_MS, RADIO_LINES, relevantHeadline } from './media'
 import { fakeTools, type Db } from './test-tools'
 
 const LIVE = { INTEGRATIONS_MODE: 'live', APP_NAME: 'citychase' }
@@ -11,6 +11,22 @@ const tools = (resp: (endpoint: string) => unknown = () => ({})) =>
 const enable = () => db.set('settings', new Map([[KILL_SWITCH_KEY, { key: KILL_SWITCH_KEY, value: 'true' }]]))
 
 beforeEach(() => { db = new Map(); calls = [] })
+
+describe('relevantHeadline', () => {
+  const tokyo = { city: 'Tokyo', name: 'Shibuya' }
+  it('keeps city-life headlines that name the city or district', () => {
+    expect(relevantHeadline('Tokyo opens a new skyline park this week', tokyo)).toBe(true)
+    expect(relevantHeadline('Heavy rain snarls Shibuya crossing traffic', tokyo)).toBe(true)
+  })
+  it('drops headlines that do not name the city', () => {
+    expect(relevantHeadline('Rain expected across the region', tokyo)).toBe(false)
+  })
+  it('drops markets, politics and violent crime even when the city is named', () => {
+    expect(relevantHeadline('Trump buys Nvidia stock in Tokyo deal', tokyo)).toBe(false)
+    expect(relevantHeadline('Kim Jong Un talks collapse after Tokyo summit', tokyo)).toBe(false)
+    expect(relevantHeadline('Two killed in Tokyo shooting', tokyo)).toBe(false)
+  })
+})
 
 describe('news ticker', () => {
   const news = () => ({ headlines: ['Tokyo opens a new skyline park this week', 'Tokyo opens a new skyline park this week', 'short', '[Removed]', 'Rain expected across Tokyo through the weekend'] })
@@ -30,6 +46,15 @@ describe('news ticker', () => {
     enable()
     expect(await getNews({}, tools(news), 'tokyo-shibuya', 'u')).toEqual([])
     expect(calls).toHaveLength(0)
+  })
+
+  it('asks NewsAPI for local topics only, and filters off-topic results (also from an older cache)', async () => {
+    enable()
+    const mixed = () => ({ headlines: ['Tokyo metro adds late-night trains', 'Trump buys Nvidia stock as Tokyo markets rally'] })
+    expect(await getNews(LIVE, tools(mixed), 'tokyo-shibuya', 'u')).toEqual(['Tokyo metro adds late-night trains'])
+    expect(String(calls[0].body.q)).toContain('traffic')
+    db.set('newsCache', new Map([['tokyo-shibuya', { cityId: 'tokyo-shibuya', headlines: ['Two killed in Tokyo shooting', 'Tokyo festival lights up Shibuya'], fetchedAtMs: Date.now() }]]))
+    expect(await getNews(LIVE, tools(mixed), 'tokyo-shibuya', 'u')).toEqual(['Tokyo festival lights up Shibuya'])
   })
 
   it('cleanHeadline trims and caps length', () => {

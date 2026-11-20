@@ -60,9 +60,10 @@ export function weatherEmoji(w: WeatherSnapshot): string {
   if (w.condition === 'snow') return '❄️'
   if (w.condition === 'rain' || w.condition === 'drizzle') return '🌧️'
   if (w.condition === 'thunderstorm') return '⛈️'
+  if (w.condition === 'mist') return '🌫️'
   if (w.windSpeed >= 8) return '💨'
   if (w.isNight) return '🌙'
-  if (w.condition === 'clouds' || w.condition === 'mist') return '☁️'
+  if (w.condition === 'clouds') return '☁️'
   return '☀️'
 }
 

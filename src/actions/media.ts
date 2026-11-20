@@ -30,6 +30,23 @@ export function cleanHeadline(h: unknown): string | null {
   return t.length > 140 ? `${t.slice(0, 137)}…` : t
 }
 
+/**
+ * Only city-life headlines belong in a game lobby. NewsAPI's "everything"
+ * search returns any article that mentions the city (markets, geopolitics,
+ * crime), so a headline must name the city and steer clear of those topics.
+ */
+const OFF_TOPIC = /\b(trump|biden|putin|kim jong|xi jinping|stock|stocks|shares|nvidia|crypto|bitcoin|ipo|earnings|tariff|sanction|election|war|missile|military|killed|kills|dead|death|murder|rape|shooting|stabbing|terror|suicide|abuse|porn|nsfw|lawsuit|sued)\b/i
+
+export function relevantHeadline(h: string, city: { city: string; name: string }): boolean {
+  const lower = h.toLowerCase()
+  const names = [city.city, city.name].map((n) => n.toLowerCase())
+  if (!names.some((n) => lower.includes(n))) return false
+  return !OFF_TOPIC.test(h)
+}
+
+/** Topics that fit a getaway game's "local news" ticker. */
+const NEWS_TOPICS = 'police OR traffic OR weather OR rain OR storm OR transport OR metro OR festival OR street OR road OR tourism OR food OR museum OR park'
+
 export async function getNews(
   env: Pick<Env, 'INTEGRATIONS_MODE'>, tools: ActionTools, cityId: string, callerId: string, nowMs = Date.now(),
 ): Promise<string[]> {
@@ -37,16 +54,17 @@ export async function getNews(
   if (!city) return []
   const cached = await tools.get('newsCache', cityId)
   const row = cached.success ? (cached.data.record.data as unknown as NewsRow) : null
-  if (row && nowMs - row.fetchedAtMs < NEWS_TTL_MS) return row.headlines
+  const keep = (list: string[]) => list.filter((h) => relevantHeadline(h, city))
+  if (row && nowMs - row.fetchedAtMs < NEWS_TTL_MS) return keep(row.headlines)
 
   const permit = await reserveCall(env, tools, 'news', callerId, nowMs)
   if (permit.ok) {
     try {
       const r = await tools.integration<{ headlines?: unknown[] }>('newsapi/search-everything', {
-        q: `"${city.city}"`, language: 'en', sortBy: 'publishedAt', pageSize: 20,
+        q: `"${city.city}" AND (${NEWS_TOPICS})`, language: 'en', sortBy: 'publishedAt', pageSize: 40,
       })
       if (r.success) {
-        const headlines = [...new Set((r.data.headlines ?? []).map(cleanHeadline).filter((h): h is string => !!h))].slice(0, MAX_HEADLINES)
+        const headlines = keep([...new Set((r.data.headlines ?? []).map(cleanHeadline).filter((h): h is string => !!h))]).slice(0, MAX_HEADLINES)
         if (headlines.length) {
           await tools.create('newsCache', { cityId, headlines, fetchedAtMs: nowMs }, cityId)
           return headlines
@@ -58,7 +76,7 @@ export async function getNews(
       console.warn(`[news] ${cityId}: ${(e as Error).message}`)
     }
   }
-  return row?.headlines ?? []
+  return keep(row?.headlines ?? [])
 }
 
 // ─── Police radio voices ────────────────────────────────────────────────────

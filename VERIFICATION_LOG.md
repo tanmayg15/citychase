@@ -474,3 +474,16 @@ Tests:
 
 Tests: a cop 6 tiles down a straight street sees you on a clear day but not in fog; a compatibility table for v1–v6. 193 tests pass; tsc and eslint are clean; checked in the browser locally (London · Fog).
 **Needs human verification:** play a fog city and check that cops spot you later.
+
+## 2026-11-20 — Lobby design pass
+**Agent did:**
+- **News ticker:** NewsAPI is now asked only for local topics (police, traffic, weather, transport, festivals…). Each headline must name the city or district, and markets, politics and violent crime are dropped. The filter also applies to already-cached headlines. Unit-tested with the real bad examples (a Trump/Nvidia story, a Kim Jong Un story).
+- **Today's heist card:** always shows the weather and rule badges, using the free mock weather (marked "demo weather") when there's no live reading.
+- **Controls strip** on the heist card: drive keys, 1/2/3 gadgets, and the goal.
+- **Weather icons** on all 20 city buttons (live where cached, otherwise mock); fog shows 🌫️.
+- **Ghost toggle:** cyan ring and glow when on.
+- **"🏆 Your best"** chip on wide screens.
+- Header no longer wraps at ~800px.
+
+193+ tests pass; tsc and eslint are clean; checked in the browser at 800px and 1440px.
+**Needs human verification:** the ticker once integrations are on.
