@@ -13,10 +13,11 @@
 import type { ActionHandler, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import {
-  CLEAR_WEATHER, DEFAULT_PLAN, ENGINE_VERSION, TICK_RATE, replay, validateInputLog,
+  DEFAULT_PLAN, ENGINE_VERSION, TICK_RATE, replay, validateInputLog,
   type CommanderPlan, type InputLog, type WeatherSnapshot,
 } from '../engine'
 import { buildConfig, dailyFor, runSeed, utcDate } from '../game/daily'
+import { resolveWeather } from './weather'
 
 export const MAX_RUNS_PER_DAY = 40
 /** Submitting must take at least this share of the game's real duration. */
@@ -55,7 +56,7 @@ async function displayName(tools: ActionTools, userId: string): Promise<string> 
   return (data.name ?? 'Player').slice(0, 40)
 }
 
-export const startRun: ActionHandler<Env> = async ({ userId, tools }) => {
+export const startRun: ActionHandler<Env> = async ({ userId, tools, env }) => {
   const daily = dailyFor(utcDate())
   const today = await tools.query('runs', { where: { userId, date: daily.date } })
   if (!today.success) return today
@@ -63,8 +64,9 @@ export const startRun: ActionHandler<Env> = async ({ userId, tools }) => {
     return fail(`Daily limit reached (${MAX_RUNS_PER_DAY} runs). Come back tomorrow.`)
   }
 
-  // Phase 4 replaces these with the cached live weather and Phase 5 with the commander plan.
-  const weather = CLEAR_WEATHER
+  // Weather is resolved and frozen on the run, so the replay uses exactly what the player saw.
+  const weather = await resolveWeather(env, tools, daily.cityId, userId)
+  // Phase 5 replaces this with the commander plan.
   const plan = DEFAULT_PLAN
   const seed = runSeed(daily.dailySeed, randomSalt())
   const row: RunRow = {

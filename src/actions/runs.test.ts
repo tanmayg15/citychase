@@ -3,45 +3,15 @@
  * ActionTools record API (same method shapes as deepspace/worker).
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { ActionTools } from 'deepspace/worker'
+import { fakeTools, type Db, type Row } from './test-tools'
 import { Dir, MAX_TICKS, replay, rngInt, type InputLog } from '../engine'
 import { buildConfig } from '../game/daily'
 import { MAX_RUNS_PER_DAY, startRun, submitRun } from './runs'
 
-type Row = Record<string, unknown>
-let db: Map<string, Map<string, Row>>
-let nextId = 0
-
-function fakeTools(): ActionTools {
-  const coll = (c: string) => { if (!db.has(c)) db.set(c, new Map()); return db.get(c)! }
-  const tools = {
-    async create(c: string, data: Row, id?: string) {
-      const key = id ?? `rec_${++nextId}`
-      coll(c).set(key, { ...(coll(c).get(key) ?? {}), ...structuredClone(data) })
-      return { success: true, data: { recordId: key } }
-    },
-    async update(c: string, id: string, patch: Row) {
-      const row = coll(c).get(id)
-      if (!row) return { success: false, error: 'not found' }
-      coll(c).set(id, { ...row, ...structuredClone(patch) })
-      return { success: true, data: { recordId: id } }
-    },
-    async get(c: string, id: string) {
-      const row = coll(c).get(id)
-      return row ? { success: true, data: { record: { recordId: id, data: structuredClone(row) } } } : { success: false, error: 'not found' }
-    },
-    async query(c: string, opts?: { where?: Row }) {
-      const records = [...coll(c).entries()]
-        .filter(([, r]) => Object.entries(opts?.where ?? {}).every(([k, v]) => r[k] === v))
-        .map(([recordId, data]) => ({ recordId, data }))
-      return { success: true, data: { records, count: records.length } }
-    },
-  }
-  return tools as unknown as ActionTools
-}
+let db: Db
 
 const ctx = (userId: string, params: Row = {}) =>
-  ({ userId, params, tools: fakeTools(), env: {} as never, callerJwt: 'x' })
+  ({ userId, params, tools: fakeTools(db), env: {} as never, callerJwt: 'x' })
 
 interface Started { runId: string; cityId: string; seed: number }
 
@@ -64,7 +34,7 @@ function log(seed = 5): InputLog {
   return out
 }
 
-beforeEach(() => { db = new Map(); nextId = 0 })
+beforeEach(() => { db = new Map() })
 
 describe('startRun', () => {
   it("creates a 'started' run for today's city with server-chosen seed", async () => {
