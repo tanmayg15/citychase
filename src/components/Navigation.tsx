@@ -1,7 +1,7 @@
 /**
- * Top nav — minimal placeholder bar wired to the app's mechanisms:
- * nav.ts-driven links (with role/dev filtering), sign-in via <AuthOverlay>,
- * and sign-out. Restyle or rebuild it freely; keep the data-testid hooks
+ * Top nav for the non-game pages (the lobby and the game are full-screen):
+ * nav.ts-driven links (with role filtering), sign-in via <AuthOverlay>, and
+ * sign-out, in the City Chase neon style. Keep the data-testid hooks
  * (`app-navigation`, `nav-sign-in-button`, `nav-user-name`, `nav-user-email`)
  * — the shipped tests rely on them. `nav-user-email` is the one that carries
  * an identity the test can check exactly: a display name is optional, the
@@ -51,15 +51,15 @@ export default function Navigation() {
   })
 
   const navLink = (item: (typeof nav)[number]) => {
-    const active = location.pathname.startsWith(item.path)
+    const active = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)
     return (
       <Link
         key={item.path}
         to={item.path}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'px-3 py-1.5 text-sm',
-          active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+          'rounded-full px-3 py-1.5 text-sm transition',
+          active ? 'bg-white/15 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white',
         )}
       >
         {item.label}
@@ -69,10 +69,10 @@ export default function Navigation() {
 
   return (
     <>
-      <nav data-testid="app-navigation" className="border-b border-border bg-background">
-        <div className="mx-auto flex h-12 max-w-7xl items-center gap-4 px-4">
-          <Link to="/" className="text-sm font-semibold text-foreground">
-            {APP_NAME}
+      <nav data-testid="app-navigation" className="dark border-b border-white/10 bg-[#07030f]/95 text-white backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
+          <Link to="/" className="text-lg font-black tracking-tight" style={{ textShadow: '0 0 16px #ff8a1f' }} aria-label={APP_NAME}>
+            CITY CHASE
           </Link>
 
           <div className="hidden items-center md:flex">{visibleNav.map(navLink)}</div>
@@ -92,7 +92,7 @@ export default function Navigation() {
                 render={
                   <button
                     aria-label="Account menu"
-                    className="group flex items-center gap-2 rounded-full border border-border bg-card/60 py-1 pl-1 pr-2.5 text-sm transition-colors hover:bg-card"
+                    className="group flex items-center gap-2 rounded-full border border-white/15 bg-white/5 py-1 pl-1 pr-2.5 text-sm text-white transition-colors hover:bg-white/10"
                   >
                     <Avatar className="h-6 w-6 ring-1 ring-inset ring-border">
                       <AvatarImage src={user.imageUrl ?? undefined} referrerPolicy="no-referrer" />
@@ -102,7 +102,7 @@ export default function Navigation() {
                     </Avatar>
                     <span
                       data-testid="nav-user-name"
-                      className="hidden max-w-[140px] truncate text-foreground sm:inline"
+                      className="hidden max-w-[140px] truncate text-white sm:inline"
                     >
                       {user.name || user.email}
                     </span>
@@ -136,14 +136,14 @@ export default function Navigation() {
             <button
               data-testid="nav-sign-in-button"
               onClick={() => setShowAuthModal(true)}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="rounded-full bg-orange-500 px-4 py-1.5 text-sm font-bold text-black shadow-[0_0_18px_rgba(255,138,31,0.5)] hover:bg-orange-400"
             >
               Sign in
             </button>
           )}
 
           <button
-            className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground md:hidden"
+            className="inline-flex h-8 w-8 items-center justify-center text-white/60 hover:text-white md:hidden"
             onClick={() => setMobileMenuOpen((prev) => !prev)}
             aria-label="Toggle menu"
             aria-expanded={mobileMenuOpen}
@@ -153,7 +153,7 @@ export default function Navigation() {
         </div>
 
         {mobileMenuOpen && (
-          <div className="flex flex-col border-t border-border px-2 py-2 md:hidden">
+          <div className="flex flex-col gap-1 border-t border-white/10 px-2 py-2 md:hidden">
             {visibleNav.map(navLink)}
           </div>
         )}

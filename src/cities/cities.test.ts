@@ -67,7 +67,7 @@ describe('city mazes', () => {
 
 describe('weather coverage', () => {
   it('every city has a live-weather query', async () => {
-    const { OWM_QUERY } = await import('../game/weather-source')
+    const { OWM_QUERY } = await import('../shared/weather')
     for (const c of CITY_MAZES) expect(OWM_QUERY[c.id], c.id).toBeTruthy()
   })
 })

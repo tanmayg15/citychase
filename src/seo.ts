@@ -17,7 +17,6 @@
  * restrictions require separate controls.
  */
 
-import { APP_NAME } from './constants'
 
 /** Injected by prerender.ts: `https://<name>.app.space` from wrangler.toml, or
  *  what `deepspace deploy` passes (staging: spacestest.com). Absent in unit

@@ -1,4 +1,4 @@
-/** /home is kept as an alias: the lobby at / is the one home page. */
+/** /home is where sign-in (OAuth) lands (src/server/http-routes.ts); it forwards to the lobby at /. */
 import { Navigate } from 'react-router-dom'
 
 export default function HomeRedirect() {

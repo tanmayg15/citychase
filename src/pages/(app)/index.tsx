@@ -9,11 +9,11 @@ import { AuthOverlay, signOut, useAuth, useAuthUser, useQuery } from 'deepspace'
 import { CITY_MAZES, getCity } from '@/cities'
 import { callAction, claimGuestIfAny, loadGuest } from '@/game/api'
 import { AttractScene, preloadCity } from '@/game/AttractScene'
-import { dailyFor, utcDate, weatherLabel } from '@/game/daily'
-import { Leaderboard } from '@/game/Leaderboard'
+import { dailyFor, utcDate, weatherLabel } from '@/shared/daily'
+import { Leaderboard } from '@/game/hud/Leaderboard'
 import { getSfx } from '@/game/sound'
-import { RuleBadges } from '@/game/WeatherInfo'
-import { WEATHER_PRESETS, type WeatherPreset, type WeatherRecord } from '@/game/weather-source'
+import { RuleBadges } from '@/game/hud/WeatherInfo'
+import { WEATHER_PRESETS, type WeatherPreset, type WeatherRecord } from '@/shared/weather'
 
 const WEATHER_LABEL: Record<WeatherPreset, string> = {
   live: '📡 Live', clear: '☀️ Clear', rain: '🌧️ Rain', snow: '❄️ Snow', wind: '💨 Wind', heat: '🔥 Heat', night: '🌙 Night', fog: '🌫️ Fog',

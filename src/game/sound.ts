@@ -165,6 +165,28 @@ export class Sfx {
   escape(): void { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i * 0.11, 0.3, 'triangle', 0.18)) }
   busted(): void { [392, 330, 262].forEach((f, i) => this.tone(f, i * 0.18, 0.35, 'sawtooth', 0.12)) }
   click(): void { this.tone(660, 0, 0.05, 'square', 0.08) }
+  /** Gadgets and pickups. */
+  nitro(): void { this.burst(0.5, 900, 0.22, 'bandpass'); [180, 260, 380].forEach((f, i) => this.tone(f, i * 0.06, 0.25, 'sawtooth', 0.07)) }
+  oil(): void { this.burst(0.18, 300, 0.25, 'lowpass'); this.tone(90, 0.02, 0.2, 'sine', 0.2) }
+  disguise(): void { [880, 1175, 1480, 1760].forEach((f, i) => this.tone(f, i * 0.05, 0.3, 'sine', 0.06)) }
+  crate(): void { [988, 1319].forEach((f, i) => this.tone(f, i * 0.08, 0.18, 'triangle', 0.12)) }
+  spinout(): void { this.burst(0.45, 1800, 0.16, 'bandpass'); this.tone(420, 0, 0.4, 'sawtooth', 0.05) }
+  /** Two metallic clicks: handcuffs. */
+  cuffs(): void { [0, 0.16].forEach((d) => { this.burst(0.03, 4200, 0.3, 'highpass'); this.tone(2400, d, 0.04, 'square', 0.05) }) }
+  /** A short "whoop" of a police siren. */
+  whoop(): void {
+    const ctx = this.ctx
+    if (!ctx || !this.master || !this.active) return
+    const o = ctx.createOscillator(), g = ctx.createGain()
+    o.type = 'sawtooth'
+    o.frequency.setValueAtTime(500, ctx.currentTime)
+    o.frequency.exponentialRampToValueAtTime(1300, ctx.currentTime + 0.35)
+    o.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.7)
+    g.gain.setValueAtTime(0.08, ctx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.75)
+    o.connect(g).connect(this.master)
+    o.start(); o.stop(ctx.currentTime + 0.8)
+  }
 
   // ─── Police radio (voice clips from the server, played through a radio filter) ───
 
@@ -184,12 +206,24 @@ export class Sfx {
     }
   }
 
-  /** Play a radio line: squelch click, band-limited "walkie-talkie" voice, static tail. Returns false if skipped. */
-  radio(id: string): boolean {
+  /**
+   * Play a radio line: squelch click, band-limited "walkie-talkie" voice,
+   * static tail. Without a voice clip (none generated yet, or integrations
+   * off) it plays a burst of radio chatter instead, so the subtitle still
+   * has a sound. Returns false if skipped (muted, or the radio is busy).
+   */
+  radio(id: string, force = false): boolean {
     const ctx = this.ctx
     const clip = this.clips.get(id)
-    if (!ctx || !this.master || !clip || !this.active) return false
-    if (ctx.currentTime < this.radioBusyUntil) return false // never talk over the previous line
+    if (!ctx || !this.master || !this.active) return false
+    if (!force && ctx.currentTime < this.radioBusyUntil) return false // never talk over the previous line
+    if (!clip) {
+      this.burst(0.06, 2500, 0.18, 'bandpass')
+      this.burst(0.35, 1400, 0.06, 'bandpass')
+      setTimeout(() => this.burst(0.1, 3000, 0.12, 'bandpass'), 450)
+      this.radioBusyUntil = ctx.currentTime + 3
+      return true
+    }
     const src = ctx.createBufferSource()
     src.buffer = clip
     const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 400

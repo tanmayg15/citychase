@@ -63,7 +63,7 @@ export async function getNews(
 
 // ─── Police radio voices ────────────────────────────────────────────────────
 
-import { RADIO_LINES } from './media-lines'
+import { RADIO_LINES } from '../shared/radio-lines'
 export { RADIO_LINES }
 const VOICE_ID = 'JBFqnCBsd6RMkjVDRZzb' // ElevenLabs' default voice from the integration spec
 

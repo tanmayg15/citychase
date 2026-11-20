@@ -5,10 +5,10 @@
  *  right  time left and lives
  * plus a flashing WANTED banner while a cop is chasing you.
  */
-import type { CityMaze } from '../cities'
-import { ruleBadges, weatherEmoji } from './daily'
-import type { Hud } from './GameCanvas'
-import type { WeatherRecord } from './weather-source'
+import type { CityMaze } from '../../cities/index'
+import { ruleBadges, weatherEmoji } from '../../shared/daily'
+import type { Hud } from '../GameCanvas'
+import type { WeatherRecord } from '../../shared/weather'
 
 const glass = 'rounded-2xl border border-white/15 bg-black/55 shadow-lg backdrop-blur-md'
 

@@ -423,3 +423,24 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 - tsc and eslint are clean; 180 tests pass. Checked in the browser locally.
 **Trade-off:** `ENGINE_VERSION` went from 2 to 3. Old scores stay on the boards, but old runs can't be ghosts. The ghost is the best v3 run in a board's top 50.
 **Needs human verification:** On a phone, check the gadget buttons are tappable and don't cover the minimap. Race a ghost to the end and check the result card.
+
+## 2026-11-20 — Final polish: page design, radio voices, cleanup, structure, tests
+**Agent did:**
+- **Pages:** one shared design (`components/brand.tsx`: night gradient, glass panels, neon toggles) for Settings, Ops, sign-in prompt, 404, About and the nav bar.
+  - Settings now shows your profile, your all-time best, your best run per board, 3D/2D, sound, race-the-ghost default and #1 email alerts.
+  - Ops now shows the kill switch as a toggle with a status light, today's runs (verified / rejected / started), and a usage bar per integration.
+- **Radio:** 7 → 16 lines, chosen by `game/radio-director.ts` (unit-tested).
+  - New moments: 3 rotating "spotted" lines, lost visual, caught (switched cars), last car, respawn, final bust, nitro, oil spin-out, disguise, 30 seconds left.
+  - New sound effects: handcuffs and a siren whoop on a catch; nitro, oil, disguise, crate pickup and spin-out.
+  - Without a voice clip, the radio plays a squelch and still shows the subtitle.
+- **Cleanup:**
+  - Removed 15 unused UI components, the theme catalog and the unused "paper" theme, the public `/dev/play` and `/dev/mazes` debug pages, the dead `commander` usage cap, the unused `toSnapshot`, and 4 unused npm dependencies (`ai`, `zod`, `yjs`, `class-variance-authority`).
+  - Kept `/home`: the OAuth sign-in callback (`server/http-routes.ts`) lands there.
+- **Structure:** new `src/shared/` (daily, weather, radio lines: used by both server and browser) and `src/game/hud/` (HUD, result, leaderboard, weather badges). Map in NOTES.md.
+- **Tests:**
+  - tsc (with unused-variable checks) and eslint are clean; 187 unit tests pass.
+  - Playwright: 7 API tests pass, including new ones for the ghost endpoint, the forged guest ticket and ops being owner-only. The smoke suite passed in the full run.
+  - The production build is OK.
+**Needs human verification:**
+- Settings and Ops while signed in (the agent can't sign in).
+- New radio voices: they need integrations ON for the ElevenLabs clips, at 2 new clips per page load. 10 new clips, under the 20/day TTS cap.

@@ -38,7 +38,7 @@ import type { ActionResult, ActionTools, VerifyResult } from 'deepspace/worker'
 import { actions } from '../actions/index.js'
 import { getGhost, guestStart, guestSubmit } from '../actions/runs.js'
 import { getNews, getRadio } from '../actions/media.js'
-import { dailyFor, utcDate } from '../game/daily.js'
+import { dailyFor, utcDate } from '../shared/daily.js'
 import { integrations } from '../integrations.js'
 import type { AppContext, Env } from '../../worker.js'
 

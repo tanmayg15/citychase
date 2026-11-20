@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { utcDate } from '../game/daily'
-import { mapOwm } from '../game/weather-source'
+import { utcDate } from '../shared/daily'
+import { mapOwm } from '../shared/weather'
 import { CAPS, KILL_SWITCH_KEY, reserveCall } from './guard'
 import { getOpsStatus, setIntegrationsEnabled } from './ops'
 import { fakeTools, type Db } from './test-tools'
@@ -72,13 +72,13 @@ describe('resolveWeather', () => {
 })
 
 describe('reserveCall per-user caps', () => {
-  it('commander: 10 per user per day, global still counts', async () => {
+  it('email: 3 per user per day, other users unaffected', async () => {
     enable()
     const t = fakeTools(db)
     const results = []
-    for (let i = 0; i < 12; i++) results.push((await reserveCall(LIVE, t, 'commander', 'u1')).ok)
-    expect(results.filter(Boolean)).toHaveLength(10)
-    expect(await reserveCall(LIVE, t, 'commander', 'u2')).toEqual({ ok: true })
+    for (let i = 0; i < 5; i++) results.push((await reserveCall(LIVE, t, 'email', 'u1')).ok)
+    expect(results.filter(Boolean)).toHaveLength(3)
+    expect(await reserveCall(LIVE, t, 'email', 'u2')).toEqual({ ok: true })
   })
 })
 
@@ -100,5 +100,17 @@ describe('owner ops', () => {
     expect((await setIntegrationsEnabled({ userId: 'owner', params: { enabled: true }, tools: t, env, callerJwt: '' })).success).toBe(true)
     const s = await getOpsStatus({ userId: 'owner', params: {}, tools: t, env, callerJwt: '' })
     expect(s.success && s.data).toMatchObject({ mode: 'mock', integrationsEnabled: true })
+  })
+
+  it("counts today's runs by status and lists only the caps that are still used", async () => {
+    const date = utcDate()
+    db.set('runs', new Map([
+      ['a', { date, status: 'verified' }], ['b', { date, status: 'verified' }],
+      ['c', { date, status: 'rejected' }], ['d', { date, status: 'started' }],
+      ['e', { date: '2000-01-01', status: 'verified' }],
+    ]))
+    const s = await getOpsStatus({ userId: 'owner', params: {}, tools: fakeTools(db), env, callerJwt: '' })
+    expect(s.success && s.data.runsToday).toEqual({ verified: 2, rejected: 1, started: 1 })
+    expect(s.success && Object.keys(s.data.caps).sort()).toEqual(['email', 'news', 'tts', 'weather'])
   })
 })

@@ -5,11 +5,11 @@
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getCity } from '../cities'
-import { AttractScene } from './AttractScene'
-import { shareString, weatherEmoji } from './daily'
+import { getCity } from '../../cities/index'
+import { AttractScene } from '../AttractScene'
+import { shareString, weatherEmoji } from '../../shared/daily'
 import { Leaderboard, topPercent, useBoard } from './Leaderboard'
-import type { WeatherRecord } from './weather-source'
+import type { WeatherRecord } from '../../shared/weather'
 
 export interface RunStats {
   outcome: string

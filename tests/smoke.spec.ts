@@ -5,8 +5,8 @@ import { captureConsoleErrors } from './helpers/errors'
  * Smoke tests covering both page kinds this template ships:
  *   - '/'      → the static landing (top level of src/pages/): no providers,
  *                so no auth fetch and no records WebSocket on load.
- *   - '/home'  → a dynamic page (under src/pages/(app)/): the providers mount,
- *                the nav shell renders, and the records WebSocket connects.
+ *   - '/settings' → a dynamic page (under src/pages/(app)/): the providers mount
+ *                and the nav shell renders.
  *
  * The "static contract" test is the guardrail for the per-page opt-out: if
  * someone moves the providers back up into _app.tsx, it fails.
@@ -22,7 +22,7 @@ test.describe('Smoke tests', () => {
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
     await page.goto('/about')
-    await expect(page.getByRole('heading', { name: 'How City Chase works' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'City Chase' })).toBeVisible()
     expect(errors).toEqual([])
   })
 
@@ -34,7 +34,7 @@ test.describe('Smoke tests', () => {
     await expect(page.getByTestId('lobby-sign-in')).toBeVisible()
   })
 
-  test('/home redirects to the lobby', async ({ page }) => {
+  test('/home (where sign-in lands) redirects to the lobby', async ({ page }) => {
     await page.goto('/home')
     await expect(page).toHaveURL(/\/$/)
   })

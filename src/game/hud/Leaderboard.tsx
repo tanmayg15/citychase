@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth, useQuery } from 'deepspace'
-import { getCity } from '../cities'
-import { loadGuest } from './api'
+import { getCity } from '../../cities/index'
+import { loadGuest } from '../api'
 
 export interface LeaderRow {
   board: string

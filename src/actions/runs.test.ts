@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fakeTools, type Db, type Row } from './test-tools'
 import { Dir, MAX_TICKS, replay, rngInt, type InputLog } from '../engine'
-import { buildConfig } from '../game/daily'
+import { buildConfig } from '../shared/daily'
 import { MAX_RUNS_PER_DAY, startRun, submitRun } from './runs'
 
 let db: Db

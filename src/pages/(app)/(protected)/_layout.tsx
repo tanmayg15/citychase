@@ -16,7 +16,7 @@
 import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
 import { AuthGate, AuthOverlay } from 'deepspace'
-import { Button } from '@/components/ui'
+import { BACKDROP, primaryBtn } from '@/components/brand'
 
 export default function ProtectedLayout() {
   return (
@@ -30,24 +30,20 @@ function SignedOutPanel() {
   const [showAuthModal, setShowAuthModal] = useState(false)
 
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-6 py-20">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 text-center">
-        <h1 className="text-lg font-semibold text-foreground">Sign in to continue</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This page is only available to signed-in users.
-        </p>
-        <Button className="mt-6 w-full" onClick={() => setShowAuthModal(true)}>
+    <div className="flex min-h-full items-center justify-center px-4 py-20 text-[#ece6ff]" style={{ background: BACKDROP }}>
+      <div className="w-full max-w-sm rounded-2xl border border-orange-400/30 bg-black/50 p-8 text-center shadow-2xl backdrop-blur-md">
+        <p className="text-4xl">🔐</p>
+        <h1 className="mt-3 text-2xl font-black">Sign in to continue</h1>
+        <p className="mt-2 text-sm text-white/60">This page needs an account. Playing never does.</p>
+        <button className={`${primaryBtn} mt-6 w-full`} onClick={() => setShowAuthModal(true)} data-testid="protected-sign-in">
           Sign in
-        </Button>
-        <Link
-          to="/"
-          className="mt-4 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-        >
-          Back to home
+        </button>
+        <Link to="/" className="mt-4 inline-block text-sm text-white/60 underline-offset-4 hover:text-white hover:underline">
+          ← Back to the lobby
         </Link>
       </div>
 
-      {showAuthModal && <AuthOverlay onClose={() => setShowAuthModal(false)} />}
+      {showAuthModal && <AuthOverlay providers={['google', 'github']} onClose={() => setShowAuthModal(false)} />}
     </div>
   )
 }

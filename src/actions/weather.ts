@@ -6,7 +6,7 @@
 import type { ActionHandler, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { getCity } from '../cities'
-import { mapOwm, mockWeather, OWM_QUERY, type OwmCurrent, type WeatherRecord } from '../game/weather-source'
+import { mapOwm, mockWeather, OWM_QUERY, type OwmCurrent, type WeatherRecord } from '../shared/weather'
 import { reserveCall } from './guard'
 
 export const WEATHER_TTL_MS = 30 * 60 * 1000

@@ -4,7 +4,7 @@
  */
 import type { ActionHandler } from 'deepspace/worker'
 import type { Env } from '../../worker'
-import { utcDate } from '../game/daily'
+import { utcDate } from '../shared/daily'
 import { CAPS, KILL_SWITCH_KEY, killSwitchOn, liveMode } from './guard'
 
 function isOwner(env: Env, userId: string): boolean {
@@ -19,10 +19,17 @@ export const getOpsStatus: ActionHandler<Env> = async ({ userId, tools, env }) =
   const global = Object.fromEntries(
     Object.keys(CAPS).map((k) => [k, rows.find((r) => r.kind === k && r.scope === 'global')?.count ?? 0]),
   )
+  const runs = await tools.query('runs', { where: { date }, limit: 1000 })
+  const runsToday = { verified: 0, rejected: 0, started: 0 }
+  if (runs.success) for (const r of runs.data.records) {
+    const st = (r.data as { status?: keyof typeof runsToday }).status
+    if (st && st in runsToday) runsToday[st]++
+  }
   return {
     success: true,
     data: {
       date,
+      runsToday,
       mode: liveMode(env) ? 'live' : 'mock',
       integrationsEnabled: await killSwitchOn(tools),
       caps: CAPS,

@@ -19,8 +19,8 @@ import {
   DEFAULT_PLAN, ENGINE_VERSION, TICK_RATE, replay, seedFromString, validateInputLog,
   type CommanderPlan, type InputLog,
 } from '../engine'
-import { buildConfig, dailyFor, runSeed, utcDate } from '../game/daily'
-import { isPreset, presetWeather, type WeatherPreset, type WeatherRecord } from '../game/weather-source'
+import { buildConfig, dailyFor, runSeed, utcDate } from '../shared/daily'
+import { isPreset, presetWeather, type WeatherPreset, type WeatherRecord } from '../shared/weather'
 import {
   hashIp, newGuest, newTicketId, signTicket, verifyGuest, verifyTicket, type GuestIdentity, type RunTicket,
 } from '../server/tickets'

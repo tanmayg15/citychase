@@ -1,10 +1,10 @@
 /** Weather line + active rule badges for a city, from the shared public cache. */
 import { useEffect, useRef } from 'react'
 import { useAuth, useQuery } from 'deepspace'
-import type { CityMaze } from '../cities'
-import { callAction } from './api'
-import { ruleBadges, weatherLabel } from './daily'
-import type { WeatherRecord } from './weather-source'
+import type { CityMaze } from '../../cities/index'
+import { callAction } from '../api'
+import { ruleBadges, weatherLabel } from '../../shared/daily'
+import type { WeatherRecord } from '../../shared/weather'
 
 const TTL_MS = 30 * 60 * 1000
 

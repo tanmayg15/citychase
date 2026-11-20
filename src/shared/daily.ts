@@ -2,11 +2,11 @@
  * Shared game setup used by both the browser and the server actions.
  * The daily city is a pure function of the UTC date: no cron, no stored row.
  */
-import { CITY_MAZES, cityMaze, getCity } from '../cities'
+import { CITY_MAZES, cityMaze, getCity } from '../cities/index'
 import {
   CLEAR_WEATHER, seedFromString, weatherToModifiers,
   type CommanderPlan, type GameConfig, type WeatherSnapshot,
-} from '../engine'
+} from '../engine/index'
 
 export function utcDate(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10)

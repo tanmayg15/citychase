@@ -9,7 +9,7 @@ import {
 } from '../engine'
 import { getCity } from '../cities'
 import { botDir } from './bot'
-import { buildConfig } from './daily'
+import { buildConfig } from '../shared/daily'
 import { supports3d } from './GameCanvas'
 import { Motion } from './motion'
 

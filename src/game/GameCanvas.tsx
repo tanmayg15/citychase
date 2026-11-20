@@ -14,7 +14,8 @@ import {
 } from '../engine'
 import { Motion, shouldHoldTurn } from './motion'
 import { getSfx, unlockOnNextGesture, type Sfx } from './sound'
-import { RADIO_TEXT } from './radio-lines'
+import { RadioDirector } from './radio-director'
+import { RADIO_LINES, type RadioId } from '../shared/radio-lines'
 import { drawFrame } from './renderer'
 import type { CityScene } from './three/CityScene'
 
@@ -233,11 +234,13 @@ export function GameCanvas({
     // Police radio: fetch the voice clips (cached on the server) and decode them.
     let radioText: string | null = null
     let radioUntil = 0
-    let lastSpotted = -Infinity
+    const director = new RadioDirector()
     let started = false
     fetch('/api/radio').then((r) => r.json() as Promise<{ data?: Record<string, string> }>).then((b) => sound?.loadRadio(b.data ?? {})).catch(() => {})
-    const say = (id: string, text: string, now: number) => {
-      if (sound?.radio(id)) { radioText = text; radioUntil = now + 4000 }
+    const say = (id: RadioId, now: number) => {
+      if (!sound?.radio(id, id === 'busted' || id === 'escaped')) return false
+      radioText = RADIO_LINES[id]; radioUntil = now + 4000
+      return true
     }
     const press = (d: Dir) => { pending = d }
     gadgetRef.current = (g: Gadget) => { if (uiRef.current === 'running') pendingGadget = g }
@@ -291,7 +294,7 @@ export function GameCanvas({
       const sec = Math.ceil(countdown / 1000)
       if (state === 'running' && countdown > 0 && sec !== lastBeep) { lastBeep = sec; sound?.countdown(false) }
       if (state === 'running' && countdown === 0 && lastBeep !== 0) { lastBeep = 0; sound?.countdown(true) }
-      if (state === 'running' && countdown === 0 && !started) { started = true; say('start', RADIO_TEXT.start, now) }
+      if (state === 'running' && countdown === 0 && !started) { started = true; say('start', now) }
       if (state === 'running' && countdown === 0 && !ended) {
         acc += Math.min(now - last, MAX_FRAME_MS)
         while (acc >= TICK_MS && s.status === 'playing') {
@@ -321,20 +324,21 @@ export function GameCanvas({
           if (prevDir !== Dir.None && s.player.dir !== prevDir) sound?.screech(cfg.modifiers.slipTiles > 0)
           for (const e of s.events) {
             if (e.type === 'loot') sound?.loot()
-            else if (e.type === 'exitOpen') { sound?.exitOpen(); say('safehouse', RADIO_TEXT.safehouse, now) }
-            else if (e.type === 'smoke') { sound?.smoke(); if (e.blinded > 0) say('smoke', RADIO_TEXT.smoke, now) }
-            else if (e.type === 'spotted') {
-              sound?.spotted()
-              if (now - lastSpotted > 8000) { lastSpotted = now; say('spotted', RADIO_TEXT.spotted, now) }
+            else if (e.type === 'exitOpen') sound?.exitOpen()
+            else if (e.type === 'smoke') sound?.smoke()
+            else if (e.type === 'spotted') sound?.spotted()
+            else if (e.type === 'gadget') {
+              if (e.kind === 'nitro') sound?.nitro()
+              else if (e.kind === 'oil') sound?.oil()
+              else sound?.disguise()
             }
-            else if (e.type === 'gadget') sound?.smoke()
-            else if (e.type === 'crate') sound?.loot()
-            else if (e.type === 'spinout') sound?.screech(true)
-            else if (e.type === 'caught') { sound?.caught(); say('caught', RADIO_TEXT.caught, now) }
-            else if (e.type === 'end') {
-              if (e.status === 'escaped') { sound?.escape(); say('escaped', RADIO_TEXT.escaped, now) } else sound?.busted()
-            }
+            else if (e.type === 'crate') sound?.crate()
+            else if (e.type === 'spinout') sound?.spinout()
+            else if (e.type === 'caught') { sound?.caught(); sound?.cuffs(); sound?.whoop() }
+            else if (e.type === 'end') { if (e.status === 'escaped') sound?.escape(); else sound?.busted() }
           }
+          // Police radio: the most important line that the radio isn't too busy for.
+          for (const id of director.cues(s, now, maxTicks)) if (say(id, now)) break
         }
       }
       // Engine and siren only while actually driving; silent on start/pause/end screens.

@@ -7,7 +7,7 @@
  * until the run is claimed (single use is enforced at claim time).
  */
 import type { CommanderPlan } from '../engine'
-import type { WeatherRecord } from '../game/weather-source'
+import type { WeatherRecord } from '../shared/weather'
 
 export interface RunTicket {
   v: 1

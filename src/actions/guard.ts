@@ -8,13 +8,12 @@
  */
 import type { ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
-import { utcDate } from '../game/daily'
+import { utcDate } from '../shared/daily'
 
-export type UsageKind = 'weather' | 'commander' | 'email' | 'news' | 'tts'
+export type UsageKind = 'weather' | 'email' | 'news' | 'tts'
 
 export const CAPS: Record<UsageKind, { global: number; perUser: number | null }> = {
   weather: { global: 7 * 48, perUser: null }, // ≤ one fetch per city per 30 min
-  commander: { global: 150, perUser: 10 },
   email: { global: 30, perUser: 3 },
   news: { global: 30, perUser: null }, // ≤ ~1 refresh per hour of today's city
   tts: { global: 20, perUser: null }, // radio lines are generated once and cached forever

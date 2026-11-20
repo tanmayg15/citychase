@@ -3,7 +3,7 @@
  * the mock fixtures (default in development and whenever real calls are off)
  * and the mapping from the openweathermap/current response to a snapshot.
  */
-import type { WeatherSnapshot } from '../engine'
+import type { WeatherSnapshot } from '../engine/index'
 
 export type WeatherSource = 'live' | 'mock' | 'stale' | 'preset'
 
@@ -117,11 +117,6 @@ export function mapOwm(cityId: string, r: OwmCurrent, nowMs: number): WeatherRec
     source: 'live',
     fetchedAtMs: nowMs,
   }
-}
-
-/** Only these fields reach the engine; the rest is display metadata. */
-export function toSnapshot(w: WeatherSnapshot): WeatherSnapshot {
-  return { condition: w.condition, tempC: w.tempC, windSpeed: w.windSpeed, windDeg: w.windDeg, isNight: w.isNight }
 }
 
 /** Weather a player can pick in Free Play. 'live' = the city's real current weather. */

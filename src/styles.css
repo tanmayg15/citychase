@@ -1,5 +1,4 @@
 @import "tailwindcss" source(none);
-@import "./themes.css";
 
 /* Scan local source + SDK components for Tailwind class usage */
 @source "./**/*.{ts,tsx}";
@@ -8,9 +7,7 @@
 /*
  * Theming — pure shadcn/ui CSS variables with [data-theme] selectors.
  *
- * The @theme block below holds the default theme (slate). All other themes
- * live in `themes.css` as `[data-theme="<id>"]` override blocks. Switching
- * themes = changing the data-theme attribute on <html> in index.html. No
+ * The @theme block below holds the app's one theme (slate, dark). No
  * JS, no FOUC.
  *
  * Status colors (success, warning, info) are intentionally NOT themed —
@@ -60,7 +57,7 @@
   --color-info-foreground: #ffffff;
 
   /*
-   * Shadows — slate (default). Each theme in themes.css tunes these.
+   * Shadows.
    *
    * Toned down 2026-05: previous values were 8px/12px offset with
    * 32px/40px blur which read as a heavy halo under every Card on
@@ -95,7 +92,6 @@
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
 }
 
-/* Theme override blocks live in `themes.css` — imported above. */
 
 /*
  * Animation keyframes for shadcn components.
