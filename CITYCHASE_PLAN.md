@@ -23,24 +23,31 @@ Submit: live URL (`<name>.app.space`), GitHub repo, writeup.
 
 ## 1. The product
 
-**City Chase** is a neon arcade maze-chase game where **each level is a real city's street grid**, and **that city's live weather changes the rules**.
+> **Redesign (2026-11-20, Tanmay):** after playtesting the first build, Tanmay judged it "just Pac-Man" and asked for a police-and-thief chase. The dot-eater rules below are replaced by the heist rules. Real-city streets, live weather, the AI commander, server-verified scores and all the platform/cost design are unchanged. Old wording is kept struck through for the record.
 
-- Collect glowing orbs and dodge ghosts. Power cores let you hunt ghosts for a short time.
-- Controls: arrow keys / WASD / swipe. Nothing else to learn.
-- **Original IP only:** no Pac-Man name, character, ghost designs, maze layouts or sounds. Own name, own sprites, neon/synthwave look.
+**City Chase** is a top-down heist chase where **each level is a real city's street grid**, and **that city's live weather changes the rules**.
+
+- You drive the getaway car. Hit **loot drops** (about 10, placed on far-apart real junctions), then reach the **safehouse**, which opens after 5 loot.
+- **Police cars** patrol. They spot you by **line of sight down a street** (headlight range), chase while they can see you, radio your last-seen spot to nearby units, then search it. Get caught 3 times and you're busted.
+- **Smoke bombs** (4 per map) blind nearby cops for a few seconds.
+- **Heat** rises every tick a cop can see you and costs points.
+- Score = loot + (escape bonus + time bonus if you escape) − heat penalty.
+- Controls: arrow keys / WASD / swipe.
+- ~~Collect glowing orbs and dodge ghosts. Power cores let you hunt ghosts.~~
+- **Original IP only:** own name, own sprites, top-down city-map look (buildings, roads, cars, light bars).
 
 ### Weather rules (live, from the city's current conditions)
 | Condition | Effect |
 |---|---|
-| Rain / snow | Slippery: one extra tile of momentum when you turn |
-| Strong wind | Ghosts drift in the wind direction |
-| Night at the city | Smaller visible area around the player |
-| Heat | Power cores last longer |
+| Rain / snow | Slippery: the car slides one extra tile when you turn |
+| Strong wind | Crosswind pushes patrol cars in the wind direction |
+| Night at the city | Smaller visible area around you **and** shorter cop headlight range |
+| Heat | Smoke bombs last longer |
 | Clear | Baseline |
 The HUD shows the active conditions ("🌧️ Tokyo, light rain, 14°C, 21:40 local").
 
 ### AI Ghost Commander
-Before each level, the AI gets a compact summary of the player's recent runs (where they turn, where they hesitate, average route) and returns a **structured strategy**: ghost targeting mode per ghost + chokepoints + a one-line taunt. The response is checked against a schema; **if it's invalid or the call fails, use a built-in default strategy.** The game must never break because of the AI.
+Before each level, the AI gets a compact summary of the player's recent runs (where they turn, where they hesitate, average route) and returns a **structured strategy**: patrol mode per cop (guard loot / guard safehouse / patrol chokepoints / roam) + chokepoints + a one-line radio taunt. The response is checked against a schema; **if it's invalid or the call fails, use a built-in default strategy.** The game must never break because of the AI.
 
 ### Modes
 - **Daily City (solo):** same city + seed for everyone each day; global leaderboard; share string `🏙️ Tokyo · 🌧️ · 48,200 · top 6%`.
