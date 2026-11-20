@@ -256,3 +256,25 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Phase 2, Day 1: guest play, lobby, Free Play, 20 cities (2026-11-20)
+
+### Agent did
+- **Plan:** §12 Phase 2 roadmap added to `CITYCHASE_PLAN.md` (agreed with Tanmay).
+- **Secret** `RUN_TICKET_SECRET`: generated with `openssl rand` and piped via `--stdin` (never printed). A separate dev value is in the git-ignored `.dev.vars`.
+- **Guest play:** public `POST /api/guest/start` returns a **server-signed run ticket** (HMAC-SHA256). It makes no paid calls and stores nothing. `claimRun` (sign-in required) checks the signature, age (≤ 1 h), **single use** and real time, then replays and records exactly like a signed-in run. The finished guest run waits in localStorage across the OAuth redirect; the lobby shows a "Save it" banner.
+- **Free Play:** any city × 8 weather presets. Leaderboards per board (`daily:<date>`, `free:<city>:<weather>`). Schema: a `board` column and `uniqueOn [board, userId]`.
+- **Lobby at `/`:** a bot-played 3D city in cinematic orbit behind the menu, Today's heist, the city grid + weather chips, leaderboards, sign-in, and a news ticker. `/home` redirects to it. A static `/about` page is prerendered. No nav bar on `/` and `/play`.
+- **20 cities:** 13 added. Overpass backoff added (429/502/503/504). A per-city `minSupport` was added for 4 sparse cities. Weather queries and demo weather exist for all cities.
+- **Tests:** 148 pass (9 new guest/free-play action tests and checks for all 20 cities). Playwright specs were updated (not run here).
+- **Browser (local):** the lobby shows the live 3D background; a guest Free Play run (Paris, rain) ran with no sign-in, ended, and showed the score + "Continue with Google or GitHub", which reached Google's real sign-in page (the agent did not sign in). The waiting-run banner shows on the lobby.
+- **Bugs found:** the lobby's 3D background was hidden behind the layout's opaque background (fixed with `isolate`). Stale browser module cache in dev after moving pages.
+
+### Notes
+- With 20 cities the daily rotation changed today's city (Mumbai → Singapore) mid-day.
+
+### Needs human verification
+- Sign in for real on the live site after a guest run and check the run is saved and appears on the board.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_

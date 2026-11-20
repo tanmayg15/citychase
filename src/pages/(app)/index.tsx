@@ -3,11 +3,12 @@
  * menu; Today's heist, Free Play (any city, any weather), leaderboards and
  * sign-in. Playing never requires sign-in.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthOverlay, signOut, useAuth, useAuthUser, useQuery } from 'deepspace'
 import { CITY_MAZES, getCity } from '@/cities'
 import { AttractScene } from '@/game/AttractScene'
+import { loadPending } from '@/game/api'
 import { dailyFor, utcDate, weatherEmoji, weatherLabel } from '@/game/daily'
 import { Leaderboard } from '@/game/Leaderboard'
 import { getSfx } from '@/game/sound'
@@ -39,7 +40,16 @@ export default function Lobby() {
 
   const { records } = useQuery<{ cityId: string; weather: WeatherRecord }>('weatherCache', { where: { cityId: daily.cityId } })
   const dailyWeather = records[0]?.data.weather
-  const bgWeather = useMemo(() => dailyWeather, [dailyWeather?.fetchedAtMs]) // eslint-disable-line react-hooks/exhaustive-deps
+  const bgWeather = useMemo(() => dailyWeather, [dailyWeather?.fetchedAtMs])
+
+  // Back from Google/GitHub sign-in with a guest run waiting: finish saving it.
+  const [pendingScore, setPendingScore] = useState<number | null>(null)
+  useEffect(() => {
+    const p = loadPending()
+    if (!p) return
+    if (isSignedIn) navigate('/play', { replace: true })
+    else setPendingScore(p.localScore)
+  }, [isSignedIn, navigate])
 
   const go = (url: string) => {
     getSfx()?.resume() // unlock audio inside the click
@@ -47,7 +57,7 @@ export default function Lobby() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden text-[#ece6ff]" data-testid="lobby">
+    <div className="relative isolate min-h-screen overflow-x-hidden text-[#ece6ff]" data-testid="lobby">
       <AttractScene cityId={daily.cityId} weather={bgWeather} />
 
       <header className="flex items-center justify-between px-5 py-4 sm:px-8">
@@ -68,6 +78,13 @@ export default function Lobby() {
           )}
         </div>
       </header>
+
+      {pendingScore !== null && (
+        <div className="mx-5 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-3 backdrop-blur sm:mx-8" data-testid="pending-banner">
+          <span>Your last run ({pendingScore.toLocaleString('en-US')} pts) isn't saved yet.</span>
+          <button onClick={() => navigate('/play')} className="rounded-lg bg-cyan-400 px-4 py-1.5 font-bold text-black">Save it</button>
+        </div>
+      )}
 
       <main className="grid gap-5 px-5 pb-24 sm:px-8 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-5">
