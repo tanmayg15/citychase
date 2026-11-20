@@ -18,7 +18,6 @@
 
 import { Link } from 'react-router-dom'
 import { Seo } from '../components/Seo'
-import { APP_NAME } from '../constants'
 import { seo } from '../seo'
 
 export default function Landing() {
@@ -27,23 +26,24 @@ export default function Landing() {
       <Seo {...seo} path="/" />
       <div
         data-testid="static-landing"
-        className="flex min-h-screen flex-col items-center justify-center px-6 text-center"
+        className="flex min-h-screen flex-col items-center justify-center px-6 text-center text-[#e8e0ff]"
+        style={{ background: '#07030f' }}
       >
-        <p className="mb-3 text-sm uppercase tracking-widest text-muted-foreground">{APP_NAME}</p>
-        <h1 className="mb-4 max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-          A DeepSpace app with a static front door
+        <p className="mb-3 text-xs uppercase tracking-[0.4em] text-fuchsia-300/80">City Chase</p>
+        <h1 className="mb-4 max-w-2xl text-4xl font-black tracking-tight sm:text-6xl" style={{ textShadow: '0 0 24px #8b5cf6' }}>
+          Real streets. Live weather. Ghosts that learn.
         </h1>
-        <p className="mb-8 max-w-md text-muted-foreground">
-          This landing page ships no auth call and no realtime connection — it's a
-          plain static page. The live app, with sign-in and synced data, lives
-          behind the link below.
+        <p className="mb-8 max-w-md opacity-75">
+          A neon maze chase where every level is a real city&apos;s street grid. One city a day, the same for
+          everyone, with every score verified by replaying the run on the server.
         </p>
         <Link
           to="/home"
-          className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          className="inline-flex items-center gap-2 rounded-lg bg-cyan-400 px-6 py-3 font-bold text-black shadow-[0_0_24px_#37f5ff] hover:bg-cyan-300"
         >
-          Enter the app
+          Play today&apos;s city
         </Link>
+        <p className="mt-10 text-xs opacity-40">Map data © OpenStreetMap contributors (ODbL).</p>
       </div>
     </>
   )
