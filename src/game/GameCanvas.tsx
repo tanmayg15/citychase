@@ -293,7 +293,7 @@ export function GameCanvas({
       }
       last = now
       const alpha = countdown > 0 ? 0 : Math.min(1, acc / TICK_MS)
-      const pos = motion.sample(s, alpha)
+      const pos = motion.sample(s, alpha, cfg.maze)
 
       if (scene) {
         const { w, h } = boxRef.current
