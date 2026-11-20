@@ -43,3 +43,8 @@ Weather cap check: 336 calls/day × $0.00195 ≈ $0.66/day at the cap. Emails at
 - Endpoint names/limits: answered above. Rate limits are not shown in `info`; still open.
 - Worker CPU limits for server replay: open (measure in Phase 3).
 - Presence update rate for Live Chase: open (Phase 8).
+
+## Phase 2: maze pipeline notes
+- Street data comes from the public Overpass API (free, no key). It is called **only** by the offline script `npm run mazes:fetch`. The raw extracts are committed in `scripts/mazes/raw/`, so the builder is reproducible without the network. Data © OpenStreetMap contributors, ODbL; attribution is shown on the viewer and stored in each maze JSON.
+- Road classes used: primary, secondary, tertiary, residential, unclassified, living_street, pedestrian (footways and service roads are excluded).
+- Tuning knob: `MIN_SUPPORT` (default 0.5). It is the weighted metres of street, as a fraction of one 100 m cell, needed to open a corridor. At 0.0 every city became an almost full grid (about 150/304 links, looking alike). At 1.0 several cities fell apart. 0.5 gives 116–166 links and visibly different layouts.

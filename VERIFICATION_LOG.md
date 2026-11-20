@@ -51,3 +51,25 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Phase 2: City mazes (offline)
+
+### Agent did
+- `scripts/mazes/cities.mjs`: the 7 areas (centre lat/lon, IANA timezone). The timezone answers the "no timezone in the weather response" issue from Phase 0.
+- `scripts/mazes/fetch-osm.mjs` (`npm run mazes:fetch`): downloaded street centrelines from Overpass into `scripts/mazes/raw/` (2.1 MB, committed). 7 requests in total, run once by hand.
+- `scripts/mazes/build-mazes.mjs` (`npm run mazes:build`): projects to metres, **rotates each city to its dominant street bearing** (NYC 28.5°, Eixample 45.5°, …), traces streets onto a 15×11 node lattice (100 m spacing, giving a 31×23 tile grid), drops weakly supported links, keeps the largest connected piece, prunes all dead ends, then places ghosts at the junction nearest the centre, the player ≥ half the max path distance away near the bottom, 4 power cores near the corners, and orbs everywhere else. Output goes to `src/cities/data/*.json`, loaded by `src/cities/index.ts`.
+- First attempt was too open (cities looked like near-identical full grids). Added road-class weighting plus the `MIN_SUPPORT` threshold, compared 0.5 / 0.6 / 1.0, and picked 0.5 (details in NOTES.md).
+- Tests (`src/cities/cities.test.ts`, 28 new, 57 in total): for every city, all open tiles are reachable, there are 4 cores, more than 120 orbs and at least 3 ghost spawns, **no dead-end tiles**, and a full game runs deterministically. Valid IANA timezones.
+- Debug viewer at **`/dev/mazes`** (static SVG page). Checked in the in-app browser: all 7 render and the console shows no errors.
+
+### Known weaknesses (for Tanmay's judgment)
+- Some mazes have big solid wall blocks where streets were dropped or disconnected (Tokyo lower-right, Mumbai right side, Paris centre). These show the real shape but waste screen space.
+- No wrap-around tunnels on city maps (the engine supports them).
+- The ghost "house" is just a junction, not an enclosed pen. Ghosts are released over time.
+
+### Needs human verification (CP2: fun is judged by a human)
+- Run `npm run dev` and open http://localhost:5173/dev/mazes. Look at every maze, then approve it or ask for a hand fix or a different `MIN_SUPPORT` or centre point.
+- Optional: `MIN_SUPPORT=0.6 npm run mazes:build` to compare (it prints ASCII mazes). Revert with `npm run mazes:build`.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
