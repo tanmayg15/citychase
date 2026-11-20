@@ -36,9 +36,9 @@ export function AttractScene({ cityId, weather = CLEAR_WEATHER }: { cityId: stri
       scene.setSize(window.innerWidth, window.innerHeight)
     }
 
-    import('./three/CityScene').then(({ CityScene }) => {
-      if (disposed) return
-      scene = new CityScene(canvas, cfg, weather)
+    import('./three/CityScene').then(({ CityScene }) => CityScene.create(canvas, cfg, weather)).then((created) => {
+      if (disposed) { created.dispose(); return }
+      scene = created
       scene.cinematic = true
       resize()
       const frame = (now: number) => {

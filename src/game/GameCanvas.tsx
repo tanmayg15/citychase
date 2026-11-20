@@ -189,9 +189,10 @@ export function GameCanvas({
     if (mode === '3d' && glRef.current) {
       const canvas = glRef.current
       import('./three/CityScene')
-        .then(({ CityScene }) => {
-          if (disposed) return
-          scene = new CityScene(canvas, cfg, weather)
+        .then(({ CityScene }) => CityScene.create(canvas, cfg, weather))
+        .then((created) => {
+          if (disposed) { created.dispose(); return }
+          scene = created
         })
         .catch((e) => {
           console.warn('[3d] falling back to 2D:', e)

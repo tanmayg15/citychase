@@ -38,6 +38,17 @@ export default function Lobby() {
   const dailyCity = getCity(daily.cityId)!
   const [cityId, setCityId] = useState(CITY_MAZES[0].id)
   const [weather, setWeather] = useState<WeatherPreset>('live')
+  // Remember the last Free Play choice so its leaderboard tab matches your last run.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('citychase:freeplay') ?? 'null') as { cityId?: string; weather?: WeatherPreset } | null
+      if (saved?.cityId && getCity(saved.cityId)) setCityId(saved.cityId)
+      if (saved?.weather && WEATHER_PRESETS.includes(saved.weather)) setWeather(saved.weather)
+    } catch { /* storage blocked */ }
+  }, [])
+  useEffect(() => {
+    try { localStorage.setItem('citychase:freeplay', JSON.stringify({ cityId, weather })) } catch { /* storage blocked */ }
+  }, [cityId, weather])
   const [board, setBoard] = useState<'alltime' | 'daily' | 'free'>('alltime')
   const [guestName, setGuestName] = useState<string | null>(null)
   useEffect(() => setGuestName(loadGuest()?.guestName ?? null), [])

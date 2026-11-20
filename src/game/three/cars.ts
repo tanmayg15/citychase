@@ -159,3 +159,45 @@ export function makePoliceCar(): CarParts {
   addXray(group, 0x8fb8ff)
   return { group, sirens: { red, blue, light } }
 }
+
+// ─── Model-based cars (Kenney CC0 Car Kit) ──────────────────────────────────
+
+/** Scale a model (forward = +Z in the kit) to `length` tiles and turn it to face +X. */
+function fromModel(template: THREE.Group, length: number): { group: THREE.Group; height: number } {
+  const group = new THREE.Group()
+  const model = template.clone(true)
+  const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3())
+  const s = length / Math.max(size.z, 0.001)
+  model.scale.setScalar(s)
+  model.rotation.y = Math.PI / 2
+  model.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true } })
+  group.add(model)
+  return { group, height: size.y * s }
+}
+
+/** Getaway car: the kit's Formula-1-style racer. */
+export function modelGetawayCar(template: THREE.Group): CarParts {
+  const { group } = fromModel(template, 0.92)
+  const headlight = new THREE.SpotLight(0xf2f7ff, 6, 7, Math.PI / 6, 0.5, 1.2)
+  headlight.position.set(0.42, 0.12, 0)
+  headlight.target.position.set(3, 0, 0)
+  group.add(headlight, headlight.target)
+  addXray(group, 0xff8a1f)
+  return { group, headlight }
+}
+
+/** Police: the kit's police car with our animated light bar on the roof. */
+export function modelPoliceCar(template: THREE.Group): CarParts {
+  const { group, height } = fromModel(template, 0.9)
+  const barGeo = new THREE.BoxGeometry(0.06, 0.03, 0.12)
+  const red = new THREE.Mesh(barGeo, new THREE.MeshStandardMaterial({ color: 0x400000, emissive: 0xff1030, emissiveIntensity: 0 }))
+  red.position.set(-0.04, height + 0.01, 0.062)
+  const blue = new THREE.Mesh(barGeo, new THREE.MeshStandardMaterial({ color: 0x000a40, emissive: 0x1a5cff, emissiveIntensity: 0 }))
+  blue.position.set(-0.04, height + 0.01, -0.062)
+  group.add(red, blue)
+  const light = new THREE.PointLight(0xff1030, 0, 3.5, 1.6)
+  light.position.set(-0.04, height + 0.3, 0)
+  group.add(light)
+  addXray(group, 0x8fb8ff)
+  return { group, sirens: { red, blue, light } }
+}

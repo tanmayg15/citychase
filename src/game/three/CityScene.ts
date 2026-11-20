@@ -14,7 +14,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { beamTiles, Cell, Dir, weatherToModifiers, type GameConfig, type GameState, type WeatherSnapshot } from '../../engine'
 import type { Pos } from '../motion'
-import { makeGetawayCar, makePoliceCar, type CarParts } from './cars'
+import { loadModels, type ModelParts, type Models } from './assets'
+import { makeGetawayCar, makePoliceCar, modelGetawayCar, modelPoliceCar, type CarParts } from './cars'
 import { asphaltTexture, facadeTextures, glowTexture, roofTexture } from './textures'
 
 const YAW = [0, Math.PI / 2, 0, -Math.PI / 2, Math.PI] // Dir → rotation.y (+X forward)
@@ -132,7 +133,18 @@ export class CityScene {
   /** Lobby background: slow orbiting camera instead of the chase cam. */
   cinematic = false
 
-  constructor(canvas: HTMLCanvasElement, private cfg: GameConfig, weather: WeatherSnapshot) {
+  /** Load the 3D models (falls back to code-built cars and buildings if they fail or take too long). */
+  static async create(canvas: HTMLCanvasElement, cfg: GameConfig, weather: WeatherSnapshot): Promise<CityScene> {
+    let models: Models | null = null
+    try {
+      models = await Promise.race([loadModels(), new Promise<null>((r) => setTimeout(() => r(null), 8000))])
+    } catch (e) {
+      console.warn('[3d] models failed to load, using built-in shapes:', e)
+    }
+    return new CityScene(canvas, cfg, weather, models)
+  }
+
+  constructor(canvas: HTMLCanvasElement, private cfg: GameConfig, weather: WeatherSnapshot, private models: Models | null = null) {
     this.night = weather.isNight
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
@@ -150,12 +162,12 @@ export class CityScene {
     this.buildCity(weather)
     this.buildProps()
 
-    this.player = makeGetawayCar()
+    this.player = this.models ? modelGetawayCar(this.models.race) : makeGetawayCar()
     this.player.group.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.renderOrder === 0) o.castShadow = true })
     if (this.player.headlight) this.player.headlight.intensity = this.night ? 14 : 4
     this.scene.add(this.player.group)
     for (let i = 0; i < cfg.plan.cops.length; i++) {
-      const c = makePoliceCar()
+      const c = this.models ? modelPoliceCar(this.models.police) : makePoliceCar()
       this.cops.push(c)
       this.copYaw.push(-Math.PI / 2)
       this.scene.add(c.group)
@@ -332,7 +344,9 @@ export class CityScene {
     })
     const roofMat = new THREE.MeshStandardMaterial({ map: roofTexture(5), vertexColors: true, roughness: 0.95, side: THREE.DoubleSide })
     const walkMat = new THREE.MeshStandardMaterial({ color: 0x8d8f93, roughness: 0.9 })
-    for (const [b, m] of [[walls, wallMat], [roofs, roofMat], [walks, walkMat]] as const) {
+    // With the model kits loaded, buildings and parks come from placeModels(); keep only the sidewalks here.
+    const layers = this.models ? [[walks, walkMat]] as const : [[walls, wallMat], [roofs, roofMat], [walks, walkMat]] as const
+    for (const [b, m] of layers) {
       const mesh = new THREE.Mesh(b.build(), m)
       mesh.castShadow = b !== walks
       mesh.receiveShadow = true
@@ -354,6 +368,7 @@ export class CityScene {
     ground.position.set(W / 2, 0, H / 2)
     ground.receiveShadow = true
     this.scene.add(ground)
+    if (this.models) this.placeModels(w)
 
     // Lane dashes and crosswalks as instanced thin boxes.
     const marks: THREE.Matrix4[] = []
@@ -405,6 +420,100 @@ export class CityScene {
         pool.rotation.x = -Math.PI / 2
         pool.position.set(x + 0.3, 0.02, y + 0.3)
         this.scene.add(pool)
+      }
+    }
+  }
+
+  /**
+   * Fill the city blocks with model buildings (one per 2×2 lot, or small ones
+   * per tile), turn the map's outer ring into park with trees, and surround the
+   * city with grassy landscape and woods. Everything is instanced.
+   */
+  private placeModels(w: WeatherSnapshot) {
+    const models = this.models!
+    const { width: W, height: H, cells } = this.cfg.maze
+    const wall = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && cells[y * W + x] === Cell.Wall
+    const batches = new Map<ModelParts, THREE.Matrix4[]>()
+    const put = (m: ModelParts, x: number, z: number, footprint: number, maxH: number, turn: number, yOff = 0.035) => {
+      const s = footprint / Math.max(m.size.x, m.size.z, 0.001)
+      const sy = Math.min(s, maxH / Math.max(m.size.y, 0.001))
+      const mat = new THREE.Matrix4().compose(
+        new THREE.Vector3(x, yOff, z),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), turn * Math.PI / 2),
+        new THREE.Vector3(s, sy, s),
+      )
+      const list = batches.get(m) ?? []
+      list.push(mat)
+      batches.set(m, list)
+    }
+    const pick = <T,>(arr: T[], k: number) => arr[Math.floor(hash(k, 17) * arr.length) % arr.length]
+    const edge = (x: number, y: number) => x === 0 || y === 0 || x === W - 1 || y === H - 1
+
+    // Park grass under the outer ring of the map.
+    const park = new THREE.MeshStandardMaterial({ color: w.condition === 'snow' ? 0xe6ebf0 : 0x5b8f3e, roughness: 1 })
+
+    for (let ly = 0; ly < H; ly += 2) for (let lx = 0; lx < W; lx += 2) {
+      const tiles = [[lx, ly], [lx + 1, ly], [lx, ly + 1], [lx + 1, ly + 1]].filter(([x, y]) => wall(x, y))
+      if (tiles.length === 0) continue
+      const k = ly * W + lx
+      const onEdge = tiles.some(([x, y]) => edge(x, y))
+      if (onEdge) {
+        for (const [x, y] of tiles) {
+          const g = new THREE.Mesh(new THREE.BoxGeometry(1, 0.05, 1), park)
+          g.position.set(x + 0.5, 0.025, y + 0.5)
+          g.receiveShadow = true
+          this.scene.add(g)
+          const r = hash(x * 31 + y, 5)
+          if (r < 0.75) put(pick(models.trees, x * 7 + y), x + 0.5, y + 0.5, 0.8 + r * 0.3, 1.6, Math.floor(r * 4), 0.05)
+          else put(pick(models.bushes, x + y * 3), x + 0.5, y + 0.5, 0.6, 0.5, 0, 0.05)
+        }
+        continue
+      }
+      if (tiles.length === 4) {
+        const tall = hash(k, 9) < 0.18
+        put(tall ? pick(models.skyscrapers, k) : pick(models.buildings, k), lx + 1, ly + 1, 1.7, tall ? 4.2 : 2.6, Math.floor(hash(k, 3) * 4))
+      } else {
+        for (const [x, y] of tiles) {
+          const r = hash(x * 13 + y, 11)
+          if (r < 0.25) put(pick(models.trees, x + y), x + 0.5, y + 0.5, 0.75, 1.4, Math.floor(r * 16))
+          else put(pick(models.buildings, x * 5 + y), x + 0.5, y + 0.5, 0.84, 2.0, Math.floor(r * 4))
+        }
+      }
+    }
+
+    // Landscape: grass all around the city and a band of woods beyond the edge.
+    const grass = new THREE.Mesh(
+      new THREE.PlaneGeometry(W + 120, H + 120),
+      new THREE.MeshStandardMaterial({ color: w.condition === 'snow' ? 0xe6ebf0 : 0x4a7a35, roughness: 1 }),
+    )
+    grass.rotation.x = -Math.PI / 2
+    grass.position.set(W / 2, -0.02, H / 2)
+    grass.receiveShadow = true
+    this.scene.add(grass)
+    for (let i = 0; i < 260; i++) {
+      const a = hash(i, 21) * Math.PI * 2
+      const d = 1.5 + hash(i, 22) * 14
+      const x = W / 2 + Math.cos(a) * (W / 2 + d)
+      const z = H / 2 + Math.sin(a) * (H / 2 + d)
+      if (x > -0.5 && x < W + 0.5 && z > -0.5 && z < H + 0.5) continue
+      put(pick(models.trees, i), x, z, 0.9 + hash(i, 23) * 0.8, 2.2, Math.floor(hash(i, 24) * 4), 0)
+    }
+
+    // Traffic lights on a few junction corners.
+    const open = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && cells[y * W + x] !== Cell.Wall
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!open(x, y) || (x * 5 + y * 7) % 6 !== 0) continue
+      const n = [open(x - 1, y), open(x + 1, y), open(x, y - 1), open(x, y + 1)].filter(Boolean).length
+      if (n >= 3) put(models.trafficLight, x + 0.92, y + 0.08, 0.35, 0.7, 2, 0)
+    }
+
+    for (const [m, mats] of batches) {
+      for (const part of m.parts) {
+        const im = new THREE.InstancedMesh(part.geometry, part.material, mats.length)
+        mats.forEach((mm, i) => im.setMatrixAt(i, mm))
+        im.castShadow = true
+        im.receiveShadow = true
+        this.scene.add(im)
       }
     }
   }

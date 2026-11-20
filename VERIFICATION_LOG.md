@@ -365,3 +365,14 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 - **Supercars (Tanmay asked for Lamborghini/Ferrari-like cars):** told Tanmay real brand designs and badges are their IP, so built **original** exotic supercars: a wedge body and teardrop canopy extruded from side profiles, a front splitter, side skirts and intakes, a diffuser, a rear wing on struts, wide wheels with dark rims, LED headlight strips, a full-width tail bar and twin exhausts. Getaway: metallic orange with black stripes. Police: a black-and-white interceptor on the same platform with a blue stripe and a low light bar.
 - **Camera:** the cars were only a few pixels wide, so the chase camera moved closer (height 13 → 9.2). The minimap keeps the overview.
 - Checked in the browser (NYC, clear). 166 tests pass.
+
+## CC0 3D models (Kenney), F1 car, landscape; board check; credits (2026-11-20)
+- **"Scores only on All-time":** checked instead of assuming. Paris · Clear shows the post-fix test run, so per-board rows work. Today is empty (no daily runs since the fix) and New York's earlier rows are in the abandoned old table (one-time reset of dev data). Added: the lobby remembers the last Free Play city and weather so its board tab matches your last run.
+- **Credits:** `deepspace app usage` → 374/500 (≈ $3.74). Tanmay's $10 top-up is not visible to this account yet. openweathermap 26 → 27 calls (the first real live weather call).
+- **Better 3D (Tanmay approved downloading CC0 packs):** downloaded Kenney's Car Kit, City Kit (Commercial), City Kit (Roads) and Nature Kit from kenney.nl via signed links. Each zip's License.txt confirms **CC0**, copied as `public/models/LICENSE-kenney-cc0.txt`. Only the models used are committed (~4 MB).
+  - Getaway car: the kit's **Formula 1-style `race`** model (Tanmay's choice). Police: the kit's `police` car with our animated light bar. Both keep the headlight, sirens and x-ray outline.
+  - City: 14 buildings and 5 skyscrapers placed per 2×2 lot (smaller ones and trees on odd tiles), with traffic lights at some junctions. The map's outer ring is park with trees and bushes, and grass landscape and woods surround the city.
+  - Everything is instanced (one draw call per part). Models load async with an 8 s timeout and fall back to the code-built cars and buildings.
+  - Issues found in testing and fixed: (1) everything washed out to white, because the kit's pastel colormap was over-lit by our sun/sky/environment light (toned down per material); (2) trees were mint/teal by design (`leafsGreen` baseColor 0.16, 0.79, 0.67), recoloured to natural greens.
+  - Performance (lobby 3D, this Mac): median frame 8.3 ms, p95 16.6 ms.
+- 166 tests pass; the production build includes `models/`.
