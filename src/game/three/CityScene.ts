@@ -691,7 +691,7 @@ export class CityScene {
       THREE.MathUtils.clamp(pp.y + 0.5, 1.5, MH - 3),
     )
     this.camTarget.lerp(goal, 1 - Math.exp(-dt * 5))
-    this.camera.position.set(this.camTarget.x, 13, this.camTarget.z + 6.2)
+    this.camera.position.set(this.camTarget.x, 9.2, this.camTarget.z + 4.6)
     this.camera.lookAt(this.camTarget.x, 0, this.camTarget.z - 0.6)
 
     this.grade.uniforms.time.value = timeMs / 1000

@@ -359,3 +359,9 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 - **Fix:** moved the leaderboard to a fresh `scores` collection. The test stand-in now enforces real `uniqueOn` rules. Regression tests: the same player on the same day saves to two boards plus all-time; the schema declares only [board, userId]. 166 tests pass. Verified end to end on the local server: a Paris run after the NYC run (exactly the failing case) → "Verified by server replay", no error.
 - **Home:** the end screen now has a **Home** button (house icon) and a "← Lobby" link top-left.
 - Old `leaderboard` rows (dev/test data) are not carried over.
+
+## Supercars + closer camera; "score not on home board" (2026-11-20)
+- **Score missing:** live logs showed a `/play` load at 10:41 but no `guest/start` or `submit` afterwards, so no run reached the server. Separately, the undeployed 500 fix (commit af624d7) means live runs currently fail to write the All-time row, which is the lobby's default tab. Both resolve with the deploy; asked Tanmay to report the time if it persists.
+- **Supercars (Tanmay asked for Lamborghini/Ferrari-like cars):** told Tanmay real brand designs and badges are their IP, so built **original** exotic supercars: a wedge body and teardrop canopy extruded from side profiles, a front splitter, side skirts and intakes, a diffuser, a rear wing on struts, wide wheels with dark rims, LED headlight strips, a full-width tail bar and twin exhausts. Getaway: metallic orange with black stripes. Police: a black-and-white interceptor on the same platform with a blue stripe and a low light bar.
+- **Camera:** the cars were only a few pixels wide, so the chase camera moved closer (height 13 → 9.2). The minimap keeps the overview.
+- Checked in the browser (NYC, clear). 166 tests pass.
