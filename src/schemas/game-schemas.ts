@@ -60,3 +60,41 @@ export const leaderboardSchema: CollectionSchema = {
     admin: { read: true, ...SERVER_ONLY },
   },
 }
+
+/** Latest weather per city (recordId = cityId), shared by all players for 30 min. */
+export const weatherCacheSchema: CollectionSchema = {
+  name: 'weatherCache',
+  columns: [
+    { name: 'cityId', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'weather', storage: 'text', interpretation: { kind: 'json' }, required: true },
+    { name: 'fetchedAtMs', storage: 'number', interpretation: 'plain', required: true },
+    { name: 'source', storage: 'text', interpretation: 'plain', required: true },
+  ],
+  permissions: {
+    '*': { read: true, ...SERVER_ONLY },
+    viewer: { read: true, ...SERVER_ONLY },
+    member: { read: true, ...SERVER_ONLY },
+    admin: { read: true, ...SERVER_ONLY },
+  },
+}
+
+/**
+ * Real integration calls counted per day. recordId = `${date}:${kind}:${scope}`
+ * where scope is 'global' or a userId. Owner (admin) reads all; users read their own.
+ */
+export const usageSchema: CollectionSchema = {
+  name: 'usage',
+  columns: [
+    { name: 'date', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'kind', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'scope', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'count', storage: 'number', interpretation: 'plain', required: true },
+  ],
+  ownerField: 'scope',
+  permissions: {
+    '*': { read: false, ...SERVER_ONLY },
+    viewer: { read: false, ...SERVER_ONLY },
+    member: { read: 'own', ...SERVER_ONLY },
+    admin: { read: true, ...SERVER_ONLY },
+  },
+}

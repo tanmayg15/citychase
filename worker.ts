@@ -108,6 +108,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   /** Immutable record-scope and platform identity. */
   DEEPSPACE_APP_ID: string
   OWNER_USER_ID: string
+  /** 'live' allows real paid integration calls (plus the owner kill switch). Anything else = mock. */
+  INTEGRATIONS_MODE?: string
   /**
    * Long-lived owner JWT used for developer-billed server calls. User-billed
    * calls always forward the signed-in caller's JWT instead.
