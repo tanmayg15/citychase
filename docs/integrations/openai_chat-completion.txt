@@ -1,0 +1,58 @@
+openai/chat-completion
+  Generate text with an OpenAI model via the Chat Completions API. Free-tier pricing differs from paid-tier pricing. Standard pricing applies to: gpt-5.6-luna, gpt-5.4-mini, gpt-5.4-nano, gpt-4o-mini, gpt-4.1-mini, gpt-4.1-nano.
+  billing: metered at the provider's actual cost plus platform markup; free-tier pricing differs
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "system",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ]
+      }
+    },
+    "model": {
+      "default": "gpt-6-sol",
+      "type": "string"
+    },
+    "max_tokens": {
+      "default": 1024,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16384
+    },
+    "temperature": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2
+    }
+  },
+  "required": [
+    "messages"
+  ]
+}
+
+Example body:
+{
+  "model": "gpt-6-sol",
+  "max_tokens": 1024
+}

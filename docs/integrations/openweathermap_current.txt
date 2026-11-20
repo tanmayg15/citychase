@@ -1,0 +1,76 @@
+openweathermap/current
+  Get current weather for a location, flattened to temperature, conditions, wind, and sun times.
+  billing: $0.00195 per request
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "location": {
+      "type": "string"
+    },
+    "q": {
+      "type": "string"
+    },
+    "units": {
+      "default": "metric",
+      "type": "string",
+      "enum": [
+        "metric",
+        "imperial",
+        "standard"
+      ]
+    }
+  }
+}
+
+Example body:
+{
+  "units": "metric"
+}
+
+Output schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "dt": {
+      "type": "number"
+    },
+    "temp": {
+      "type": "number"
+    },
+    "feels_like": {
+      "type": "number"
+    },
+    "humidity": {
+      "type": "number"
+    },
+    "pressure": {
+      "type": "number"
+    },
+    "visibility": {
+      "type": "number"
+    },
+    "description": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "wind_speed": {
+      "type": "number"
+    },
+    "wind_deg": {
+      "type": "number"
+    },
+    "sunrise": {
+      "type": "number"
+    },
+    "sunset": {
+      "type": "number"
+    }
+  },
+  "additionalProperties": false
+}

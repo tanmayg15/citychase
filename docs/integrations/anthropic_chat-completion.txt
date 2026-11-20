@@ -1,0 +1,73 @@
+anthropic/chat-completion
+  Generate text with a Claude model via the Anthropic Messages API. Free-tier pricing differs from paid-tier pricing. Standard pricing applies to: claude-haiku-5-5, claude-haiku-4-5.
+  billing: metered at the provider's actual cost plus platform markup; free-tier pricing differs
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "model": {
+      "default": "claude-opus-5-5",
+      "type": "string"
+    },
+    "max_tokens": {
+      "default": 4096,
+      "type": "number",
+      "minimum": 1
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ]
+      }
+    },
+    "system": {
+      "type": "string"
+    },
+    "temperature": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "required": [
+    "messages"
+  ]
+}
+
+Example body:
+{
+  "model": "claude-opus-5-5",
+  "max_tokens": 4096
+}
