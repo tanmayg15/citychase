@@ -14,7 +14,3 @@ src/modals.tsx
 .claude/launch.json
 .claude/worktrees
 
-# ML training environment and checkpoints
-ml/.venv
-ml/runs
-ml/checkpoints

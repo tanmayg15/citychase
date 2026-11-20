@@ -1,8 +1,8 @@
 /**
  * A simple getaway-driver bot: heads for the nearest loot (or the open
  * safehouse) by road distance, and avoids stepping next to a non-blind cop
- * when it can. Used by the lobby's attract-mode demo, the balance report and
- * (later) as an RL training opponent. Deterministic.
+ * when it can. Used by the lobby's attract-mode demo and the balance report.
+ * Deterministic.
  */
 import { bfs } from '../engine/engine'
 import { canMove } from '../engine/maze'

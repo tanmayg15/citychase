@@ -21,7 +21,7 @@ const WEATHER_LABEL: Record<WeatherPreset, string> = {
 
 const TICKER = [
   'BREAKING: Getaway car spotted near the waterfront, units en route',
-  'Police chief: "Our new dispatch system learns from every chase"',
+  'Police chief: "Every unit has eyes on the main avenues tonight"',
   'Weather desk: rain makes roads slick, drivers slide on turns',
   'Smoke-bomb sightings up 300% this week, say officials',
   'Safehouse locations change daily, say anonymous sources',
@@ -63,7 +63,7 @@ export default function Lobby() {
       <header className="flex items-center justify-between px-5 py-4 sm:px-8">
         <div className="flex items-baseline gap-3">
           <span className="text-2xl font-black tracking-tight" style={{ textShadow: '0 0 18px #ff8a1f' }}>CITY CHASE</span>
-          <span className="hidden text-xs uppercase tracking-[0.3em] text-white/50 sm:inline">real streets · live weather · cops that learn</span>
+          <span className="hidden text-xs uppercase tracking-[0.3em] text-white/50 sm:inline">real streets · live weather · real chases</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <Link to="/about" className="text-white/60 hover:text-white">How it works</Link>
