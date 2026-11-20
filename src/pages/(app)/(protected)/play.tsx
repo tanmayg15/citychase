@@ -98,7 +98,16 @@ export default function PlayPage() {
 
         {cfg && run && (phase.kind === 'playing' || phase.kind === 'submitting') && (
           <div className="relative">
-            <GameCanvas cfg={cfg} view={view} weather={run.weather} maxTicks={MAX_TICKS} onHud={setHud} onEnd={onEnd} />
+            <GameCanvas
+              cfg={cfg}
+              view={view}
+              weather={run.weather}
+              maxTicks={MAX_TICKS}
+              onHud={setHud}
+              onEnd={onEnd}
+              onRestart={start}
+              onQuit={() => setPhase({ kind: 'idle' })}
+            />
             {hud && hud.countdown > 0 && (
               <Overlay>
                 <p className="mb-2 max-w-sm text-center text-sm italic text-red-300">📻 “{run.plan.taunt}”</p>

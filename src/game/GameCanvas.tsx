@@ -13,6 +13,7 @@ import {
   type GameConfig, type GameState, type InputLog, type WeatherSnapshot,
 } from '../engine'
 import { Motion } from './motion'
+import { Sfx } from './sound'
 import { drawFrame } from './renderer'
 import type { CityScene } from './three/CityScene'
 
@@ -59,8 +60,17 @@ export function supports3d(): boolean {
   }
 }
 
+type Ui = 'ready' | 'running' | 'paused' | 'ended'
+
+const OUTCOME: Record<string, string> = {
+  escaped: 'Clean getaway!',
+  busted: 'Busted.',
+  timeout: 'Out of time.',
+}
+
 export function GameCanvas({
   cfg, maxTicks, onHud, onEnd, view = '3d', weather = CLEAR_WEATHER,
+  waitForStart = false, showEndScreen = false, onRestart, onQuit,
 }: {
   cfg: GameConfig
   maxTicks: number
@@ -68,7 +78,20 @@ export function GameCanvas({
   onEnd: (log: InputLog, final: GameState) => void
   view?: View
   weather?: WeatherSnapshot
+  /** Show a Start screen first (practice). The daily run already had its Start button. */
+  waitForStart?: boolean
+  /** Show the outcome + Play again / Quit when the game ends (practice). */
+  showEndScreen?: boolean
+  onRestart?: () => void
+  onQuit?: () => void
 }) {
+  const [ui, setUi] = useState<Ui>(waitForStart ? 'ready' : 'running')
+  const uiRef = useRef<Ui>(ui)
+  const setUiBoth = (u: Ui) => { uiRef.current = u; setUi(u) }
+  const [final, setFinal] = useState<{ status: string; score: number; loot: number } | null>(null)
+  const sfx = useRef<Sfx | null>(null)
+  if (!sfx.current && typeof window !== 'undefined') sfx.current = new Sfx()
+  const [muted, setMuted] = useState(() => sfx.current?.isMuted() ?? false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<HTMLCanvasElement>(null)
@@ -80,6 +103,7 @@ export function GameCanvas({
   cb.current = { onHud, onEnd }
 
   useEffect(() => setMode(view), [view])
+  useEffect(() => () => sfx.current?.dispose(), [])
 
   // 2D tile size (2D view) or minimap size (3D view).
   const tile2d = Math.max(8, Math.min(32, Math.floor(Math.min(box.w / cfg.maze.width, box.h / cfg.maze.height))))
@@ -126,7 +150,8 @@ export function GameCanvas({
     const motion = new Motion(s)
     let acc = 0
     let last = performance.now()
-    const startAt = last + COUNTDOWN_MS
+    let startAt = Number.POSITIVE_INFINITY // set when the player starts
+    let lastBeep = -1
     let raf = 0
     let ended = false
     let scene: CityScene | null = null
@@ -146,10 +171,25 @@ export function GameCanvas({
         })
     }
 
+    const sound = sfx.current
     const press = (d: Dir) => { pending = d }
     const onKey = (e: KeyboardEvent) => {
+      if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (uiRef.current === 'running' || uiRef.current === 'paused')) {
+        e.preventDefault()
+        if (uiRef.current === 'running') { setUiBoth('paused'); sound?.suspend() } else { setUiBoth('running'); sound?.resume() }
+        return
+      }
+      if ((e.key === 'Enter' || e.key === ' ') && uiRef.current === 'ready') {
+        e.preventDefault()
+        sound?.resume()
+        setUiBoth('running')
+        return
+      }
       const d = KEYS[e.key]
-      if (d) { e.preventDefault(); press(d) }
+      if (d) {
+        e.preventDefault()
+        if (uiRef.current === 'running') press(d)
+      }
     }
     let touch: { x: number; y: number } | null = null
     const onTouchStart = (e: TouchEvent) => { touch = { x: e.touches[0].clientX, y: e.touches[0].clientY } }
@@ -166,8 +206,18 @@ export function GameCanvas({
     wrap.addEventListener('touchmove', onTouchMove, { passive: false })
 
     const frame = (now: number) => {
-      const countdown = Math.max(0, startAt - now)
-      if (countdown === 0 && !ended) {
+      const state = uiRef.current
+      if (state === 'running' && startAt === Number.POSITIVE_INFINITY) startAt = now + COUNTDOWN_MS
+      // While paused (or not started) wall time passes but game time does not.
+      if (state !== 'running') {
+        if (startAt !== Number.POSITIVE_INFINITY) startAt += now - last
+        last = now
+      }
+      const countdown = startAt === Number.POSITIVE_INFINITY ? COUNTDOWN_MS : Math.max(0, startAt - now)
+      const sec = Math.ceil(countdown / 1000)
+      if (state === 'running' && countdown > 0 && sec !== lastBeep) { lastBeep = sec; sound?.countdown(false) }
+      if (state === 'running' && countdown === 0 && lastBeep !== 0) { lastBeep = 0; sound?.countdown(true) }
+      if (state === 'running' && countdown === 0 && !ended) {
         acc += Math.min(now - last, MAX_FRAME_MS)
         while (acc >= TICK_MS && s.status === 'playing') {
           acc -= TICK_MS
@@ -179,8 +229,18 @@ export function GameCanvas({
             step(cfg, s)
           }
           motion.update(s)
+          for (const e of s.events) {
+            if (e.type === 'loot') sound?.loot()
+            else if (e.type === 'exitOpen') sound?.exitOpen()
+            else if (e.type === 'smoke') sound?.smoke()
+            else if (e.type === 'spotted') sound?.spotted()
+            else if (e.type === 'caught') sound?.caught()
+            else if (e.type === 'end') (e.status === 'escaped' ? sound?.escape() : sound?.busted())
+          }
         }
       }
+      sound?.update(state === 'running' && countdown === 0 && s.player.dir !== Dir.None && s.status === 'playing',
+        state === 'running' && s.status === 'playing' && s.cops.some((c) => c.status === 'chase'), now)
       last = now
       const alpha = countdown > 0 ? 0 : Math.min(1, acc / TICK_MS)
       const pos = motion.sample(s, alpha)
@@ -219,6 +279,9 @@ export function GameCanvas({
       })
       if (s.status !== 'playing' && !ended) {
         ended = true
+        setFinal({ status: s.status, score: s.score, loot: s.lootTaken })
+        setUiBoth('ended')
+        sound?.update(false, false, now)
         cb.current.onEnd(log, s)
       }
       raf = requestAnimationFrame(frame)
@@ -227,6 +290,7 @@ export function GameCanvas({
 
     return () => {
       disposed = true
+      sound?.update(false, false, 0)
       cancelAnimationFrame(raf)
       scene?.dispose()
       window.removeEventListener('keydown', onKey)
@@ -237,6 +301,62 @@ export function GameCanvas({
   }, [cfg, maxTicks, mode, weather])
 
   const night = cfg.modifiers.visionRadius !== null
+  const start = () => { sfx.current?.resume(); sfx.current?.click(); setUiBoth('running') }
+  const togglePause = () => {
+    if (ui === 'running') { setUiBoth('paused'); sfx.current?.suspend() }
+    else if (ui === 'paused') { setUiBoth('running'); sfx.current?.resume() }
+  }
+  const toggleMute = () => { const m = !muted; setMuted(m); sfx.current?.setMuted(m) }
+  const btn = 'rounded-lg px-5 py-2.5 font-bold'
+  const primary = `${btn} bg-cyan-400 text-black shadow-[0_0_18px_#37f5ff] hover:bg-cyan-300`
+  const secondary = `${btn} border border-white/30 text-white hover:bg-white/10`
+
+  const overlays = (
+    <>
+      <div className="absolute left-2 top-2 z-30 flex gap-2">
+        {(ui === 'running' || ui === 'paused') && (
+          <button onClick={togglePause} className="rounded-md bg-black/60 px-3 py-1.5 text-sm text-white backdrop-blur" data-testid="pause-button" aria-label={ui === 'paused' ? 'Resume' : 'Pause'}>
+            {ui === 'paused' ? '▶ Resume' : '❚❚ Pause'}
+          </button>
+        )}
+        <button onClick={toggleMute} className="rounded-md bg-black/60 px-3 py-1.5 text-sm text-white backdrop-blur" data-testid="mute-button" aria-label={muted ? 'Unmute' : 'Mute'}>
+          {muted ? '🔇' : '🔊'}
+        </button>
+      </div>
+      {ui !== 'running' && !(ui === 'ended' && !showEndScreen) && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 rounded-xl bg-black/65 text-center text-white backdrop-blur-sm" data-testid={`screen-${ui}`}>
+          {ui === 'ready' && (
+            <>
+              <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-300">City Chase</p>
+              <h2 className="text-3xl font-black" style={{ textShadow: '0 0 18px #37f5ff' }}>Ready for the heist?</h2>
+              <p className="max-w-sm text-sm opacity-80">Arrows / WASD / swipe to drive. Esc or P pauses.</p>
+              <button onClick={start} className={primary} data-testid="start-button">Start</button>
+            </>
+          )}
+          {ui === 'paused' && (
+            <>
+              <h2 className="text-3xl font-black">Paused</h2>
+              <div className="flex gap-3">
+                <button onClick={togglePause} className={primary} data-testid="resume-button">Resume</button>
+                {onRestart && <button onClick={onRestart} className={secondary} data-testid="restart-button">Restart</button>}
+                {onQuit && <button onClick={onQuit} className={secondary} data-testid="quit-button">Quit</button>}
+              </div>
+            </>
+          )}
+          {ui === 'ended' && final && (
+            <>
+              <h2 className="text-3xl font-black">{OUTCOME[final.status] ?? final.status}</h2>
+              <p className="font-mono">{final.score.toLocaleString('en-US')} pts · {final.loot} loot</p>
+              <div className="flex gap-3">
+                {onRestart && <button onClick={onRestart} className={primary} data-testid="again-button">Play again</button>}
+                {onQuit && <button onClick={onQuit} className={secondary} data-testid="quit-button">Quit</button>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  )
   const mapW = cfg.maze.width * mapTile, mapH = cfg.maze.height * mapTile
 
   return (
@@ -247,6 +367,7 @@ export function GameCanvas({
         <div key="view-3d" className="relative overflow-hidden rounded-xl" style={{ width: box.w, height: box.h, background: '#0b0d12' }}>
           <canvas ref={glRef} data-testid="game-canvas" style={{ width: box.w, height: box.h, display: 'block' }} />
           {night && <div ref={nightRef} className="pointer-events-none absolute inset-0" />}
+          {overlays}
           <canvas
             ref={mapRef}
             data-testid="minimap"
@@ -256,7 +377,10 @@ export function GameCanvas({
         </div>
       ) : (
         <div key="view-2d" className="flex justify-center">
-          <canvas ref={mapRef} data-testid="game-canvas" className="rounded-xl" style={{ width: mapW, height: mapH }} />
+          <div className="relative" style={{ width: mapW, height: mapH }}>
+            <canvas ref={mapRef} data-testid="game-canvas" className="rounded-xl" style={{ width: mapW, height: mapH }} />
+            {overlays}
+          </div>
         </div>
       )}
     </div>

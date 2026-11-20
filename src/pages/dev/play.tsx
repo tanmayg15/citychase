@@ -3,6 +3,7 @@
  * submission. Scores here are NOT verified and never reach the leaderboard.
  */
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CITY_MAZES } from '@/cities'
 import { CLEAR_WEATHER, DEFAULT_PLAN, MAX_TICKS, type WeatherSnapshot } from '@/engine'
 import { buildConfig } from '@/game/daily'
@@ -25,6 +26,7 @@ export default function PracticePage() {
   const [hud, setHud] = useState<Hud | null>(null)
   const [last, setLast] = useState<string>('')
   const [view, setView] = useView()
+  const navigate = useNavigate()
   const cfg = useMemo(
     () => buildConfig({ cityId, seed: 1000 + game, weather: WEATHERS[weather], plan: DEFAULT_PLAN }),
     [cityId, weather, game],
@@ -54,6 +56,10 @@ export default function PracticePage() {
           cfg={cfg}
           view={view}
           weather={WEATHERS[weather]}
+          waitForStart
+          showEndScreen
+          onRestart={() => setGame((g) => g + 1)}
+          onQuit={() => navigate('/home')}
           maxTicks={MAX_TICKS}
           onHud={setHud}
           onEnd={(log, s) => setLast(`Last game: ${s.status}, ${s.score} pts, ${s.lootTaken} loot, ${log.length} inputs`)}
