@@ -186,12 +186,24 @@ export default function Lobby() {
         {/* Leaderboard */}
         <aside className={`${panel} flex h-fit max-h-full min-h-0 flex-col p-5`}>
           <p className="mb-2 text-xs uppercase tracking-[0.25em] text-white/50">Leaderboard</p>
-          <div className="mb-3 flex gap-1.5 text-sm">
-            <button onClick={() => setBoard('alltime')} data-testid="board-alltime" className={`rounded-full px-3 py-1 ${board === 'alltime' ? 'bg-white/20' : 'text-white/60'}`}>All-time</button>
-            <button onClick={() => setBoard('daily')} className={`rounded-full px-3 py-1 ${board === 'daily' ? 'bg-white/20' : 'text-white/60'}`}>Today's heist</button>
-            <button onClick={() => setBoard('free')} className={`truncate rounded-full px-3 py-1 ${board === 'free' ? 'bg-white/20' : 'text-white/60'}`}>
-              {pick.city} · {WEATHER_LABEL[weather]}
-            </button>
+          <div className="mb-3 flex flex-wrap gap-1.5 text-sm" role="tablist">
+            {([
+              ['alltime', 'All-time', 'Best score ever, any city'],
+              ['daily', 'Daily', `Today's heist: ${dailyCity.city}`],
+              ['free', `${pick.city} ${WEATHER_LABEL[weather].split(' ')[0]}`, `${pick.city} · ${WEATHER_LABEL[weather]}`],
+            ] as const).map(([id, label, title]) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={board === id}
+                title={title}
+                onClick={() => setBoard(id)}
+                data-testid={`board-${id}`}
+                className={`whitespace-nowrap rounded-full px-3 py-1 ${board === id ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white'}`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
             <Leaderboard board={board === 'alltime' ? 'alltime' : board === 'daily' ? `daily:${daily.date}` : `free:${cityId}:${weather}`} limit={10} />
