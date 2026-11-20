@@ -180,7 +180,7 @@ async function verifyAndRecord(
   const atScore = at.success ? (at.data.record.data as unknown as LeaderRow).score : -1
   if (end.score > atScore) {
     await tools.create('scores', {
-      board: ALL_TIME_BOARD, date: run.date, cityId: run.cityId, userId,
+      board: ALL_TIME_BOARD, date: run.date, cityId: run.cityId, userId, fromBoard: run.board,
       name: nameOverride ?? await displayName(tools, userId), score: end.score, runId, guest: userId.startsWith('guest_'),
     }, atId)
   }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth, useQuery } from 'deepspace'
+import { getCity } from '../cities'
 import { loadGuest } from './api'
 
 export interface LeaderRow {
@@ -11,6 +12,7 @@ export interface LeaderRow {
   score: number
   runId: string
   guest?: boolean
+  fromBoard?: string
 }
 
 /** Board ids: 'alltime' (one row per player), `daily:<date>`, `free:<city>:<weather>`. Server-written only. */
@@ -35,6 +37,16 @@ export function useMyLeaderId(): string | null {
 }
 
 const MEDAL = ['🥇', '🥈', '🥉']
+const WEATHER_NAME: Record<string, string> = { live: 'Live', clear: 'Clear', rain: 'Rain', snow: 'Snow', wind: 'Wind', heat: 'Heat', night: 'Night', fog: 'Fog' }
+
+/** "New York · Clear" for free:nyc-midtown:clear, "Daily · Singapore" for daily boards. */
+export function boardLabel(board: string | undefined, cityId?: string): string | null {
+  if (!board) return null
+  const [kind, a, b] = board.split(':')
+  if (kind === 'free') return `${getCity(a)?.city ?? a} · ${WEATHER_NAME[b] ?? b}`
+  if (kind === 'daily') return `Daily heist${cityId ? ` · ${getCity(cityId)?.city ?? cityId}` : ''}`
+  return null
+}
 
 function Row({ rank, row, me }: { rank: number; row: LeaderRow; me: boolean }) {
   return (
@@ -44,7 +56,12 @@ function Row({ rank, row, me }: { rank: number; row: LeaderRow; me: boolean }) {
     >
       <span className="flex min-w-0 items-center gap-2">
         <span className={`w-6 shrink-0 text-center ${rank <= 3 ? '' : 'text-white/50'}`}>{rank <= 3 ? MEDAL[rank - 1] : rank}</span>
-        <span className="truncate">{row.name}{me ? ' (you)' : ''}</span>
+        <span className="min-w-0">
+          <span className="block truncate">{row.name}{me ? ' (you)' : ''}</span>
+          {row.board === 'alltime' && boardLabel(row.fromBoard, row.cityId) && (
+            <span className="block truncate text-[11px] text-white/45">{boardLabel(row.fromBoard, row.cityId)}</span>
+          )}
+        </span>
         {row.guest && <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">guest</span>}
       </span>
       <span className="font-mono tabular-nums">{row.score.toLocaleString('en-US')}</span>

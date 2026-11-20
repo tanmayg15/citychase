@@ -191,6 +191,7 @@ describe('regression: same player, same day, several boards', () => {
     const keys = [...db.get('scores')!.keys()]
     expect(keys).toContain(`free:nyc-midtown:live:guest_${g.guest.guestId}`)
     expect(keys).toContain(`alltime:guest_${g.guest.guestId}`)
+    expect(db.get('scores')!.get(`alltime:guest_${g.guest.guestId}`)!.fromBoard).toBe('free:nyc-midtown:live')
     // A second board on the same day for the same player also works.
     const g2 = await start({ mode: 'free', cityId: 'paris-marais', weather: 'rain', guestId: g.guest.guestId, guestToken: g.guest.guestToken })
     const r2 = await guestSubmit(env, tools(), { ticket: await aged(g2.ticket), inputLog: log(2), ...g2.guest }, 'ip')

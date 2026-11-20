@@ -68,6 +68,12 @@ export default function PlayPage() {
       : { mode }
   }, [params])
 
+  // Free Play: remember this city/weather so the lobby's board tab shows it when you return.
+  useEffect(() => {
+    if (runParams.mode !== 'free') return
+    try { localStorage.setItem('citychase:freeplay', JSON.stringify({ cityId: runParams.cityId, weather: runParams.weather })) } catch { /* storage blocked */ }
+  }, [runParams])
+
   const start = useCallback(async () => {
     getSfx()?.resume() // inside the click when this is "Play again"
     setPhase({ kind: 'starting' })

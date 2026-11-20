@@ -188,7 +188,7 @@ export default function Lobby() {
           <p className="mb-2 text-xs uppercase tracking-[0.25em] text-white/50">Leaderboard</p>
           <div className="mb-3 flex gap-1.5 text-sm">
             <button onClick={() => setBoard('alltime')} data-testid="board-alltime" className={`rounded-full px-3 py-1 ${board === 'alltime' ? 'bg-white/20' : 'text-white/60'}`}>All-time</button>
-            <button onClick={() => setBoard('daily')} className={`rounded-full px-3 py-1 ${board === 'daily' ? 'bg-white/20' : 'text-white/60'}`}>Today</button>
+            <button onClick={() => setBoard('daily')} className={`rounded-full px-3 py-1 ${board === 'daily' ? 'bg-white/20' : 'text-white/60'}`}>Today's heist</button>
             <button onClick={() => setBoard('free')} className={`truncate rounded-full px-3 py-1 ${board === 'free' ? 'bg-white/20' : 'text-white/60'}`}>
               {pick.city} · {WEATHER_LABEL[weather]}
             </button>

@@ -63,6 +63,8 @@ export const leaderboardSchema: CollectionSchema = {
     { name: 'score', storage: 'number', interpretation: 'plain', required: true },
     { name: 'runId', storage: 'text', interpretation: 'plain', required: true },
     { name: 'guest', storage: 'number', interpretation: { kind: 'boolean' } },
+    /** On the all-time board: which board the best run came from (e.g. free:nyc-midtown:clear). */
+    { name: 'fromBoard', storage: 'text', interpretation: 'plain' },
   ],
   uniqueOn: ['board', 'userId'],
   permissions: {
