@@ -1,9 +1,9 @@
 /** Daily City home: today's city, the play button, and today's verified leaderboard. */
 import { Link } from 'react-router-dom'
 import { getCity } from '@/cities'
-import { CLEAR_WEATHER } from '@/engine'
-import { dailyFor, utcDate, weatherLabel } from '@/game/daily'
+import { dailyFor, utcDate } from '@/game/daily'
 import { Leaderboard } from '@/game/Leaderboard'
+import { WeatherInfo } from '@/game/WeatherInfo'
 
 export default function HomePage() {
   const daily = dailyFor(utcDate())
@@ -20,7 +20,7 @@ export default function HomePage() {
           Everyone plays the same real street grid today. Collect the orbs, dodge the drones, grab a power core to
           turn the chase around.
         </p>
-        <p className="mt-1 text-sm opacity-70">{weatherLabel(city.city, city.timezone, CLEAR_WEATHER)}</p>
+        <WeatherInfo city={city} />
 
         <Link
           to="/play"

@@ -18,6 +18,7 @@ export interface NavItem {
 export const nav: NavItem[] = [
   { path: '/home', label: 'Daily City' },
   { path: '/play', label: 'Play' },
+  { path: '/ops', label: 'Ops', roles: ['admin'] },
   { path: '/settings', label: 'Settings' },
   // The /api-status debug page still exists — add
   // `{ path: '/api-status', label: 'API Status', devOnly: true }` to surface it.

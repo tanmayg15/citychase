@@ -66,8 +66,24 @@ export function weatherEmoji(w: WeatherSnapshot): string {
   return '☀️'
 }
 
-/** "Tokyo, clear, 18°C, 21:40 local" */
-export function weatherLabel(city: string, timezone: string, w: WeatherSnapshot, now: Date = new Date()): string {
+/** "🌧️ Tokyo, light rain, 14°C, 21:40 local" */
+export function weatherLabel(
+  city: string, timezone: string, w: WeatherSnapshot & { description?: string }, now: Date = new Date(),
+): string {
   const local = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit' }).format(now)
-  return `${weatherEmoji(w)} ${city}, ${w.condition}, ${w.tempC}°C, ${local} local`
+  return `${weatherEmoji(w)} ${city}, ${w.description || w.condition}, ${w.tempC}°C, ${local} local`
+}
+
+const ARROWS = ['', '↑', '→', '↓', '←']
+
+/** Short labels for the weather rules currently in effect. */
+export function ruleBadges(w: WeatherSnapshot): string[] {
+  const m = weatherToModifiers(w)
+  const out: string[] = []
+  if (m.slipTiles) out.push('Slippery streets')
+  if (m.wind) out.push(`Wind pushes drones ${ARROWS[m.wind.dir]}`)
+  if (m.visionRadius !== null) out.push('Night: short sight')
+  if (m.powerTicks > 120) out.push('Heat: longer power')
+  if (out.length === 0) out.push('Clear: no modifiers')
+  return out
 }

@@ -5,18 +5,20 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getCity } from '@/cities'
-import { MAX_TICKS, type CommanderPlan, type GameState, type InputLog, type WeatherSnapshot } from '@/engine'
+import { MAX_TICKS, type CommanderPlan, type GameState, type InputLog } from '@/engine'
 import { callAction } from '@/game/api'
 import { buildConfig, shareString, weatherEmoji, weatherLabel } from '@/game/daily'
 import { GameCanvas, type Hud } from '@/game/GameCanvas'
 import { Leaderboard, topPercent, useDailyBoard } from '@/game/Leaderboard'
+import { RuleBadges } from '@/game/WeatherInfo'
+import type { WeatherRecord } from '@/game/weather-source'
 
 interface StartedRun {
   runId: string
   date: string
   cityId: string
   seed: number
-  weather: WeatherSnapshot
+  weather: WeatherRecord
   plan: CommanderPlan
 }
 
@@ -99,6 +101,7 @@ export default function PlayPage() {
             {hud && hud.countdown > 0 && (
               <Overlay>
                 <p className="mb-2 max-w-sm text-center text-sm italic text-orange-300">“{run.plan.taunt}”</p>
+                <RuleBadges weather={run.weather} />
                 <p className="text-6xl font-black" style={{ textShadow: '0 0 20px #37f5ff' }}>{hud.countdown}</p>
               </Overlay>
             )}
