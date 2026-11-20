@@ -1,6 +1,6 @@
 # Verification Log
 
-For each phase: what the agent did, what needs a human to check, and what Tanmay verified or changed (Tanmay fills in that last part).
+For each phase: what the agent did, what needs a human to check, and what Tanmay verified or changed. Later entries record Tanmay's reports and decisions inline ("Tanmay reported / asked").
 
 ## Phase 0 — Platform checks
 
@@ -22,7 +22,7 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 ### Tanmay verified or changed
 - Approved `app init`, the GitHub repo, the push and the first deploy.
 - Decided: Cerebras is replaced by a second Claude Haiku personality.
-- _(Tanmay to fill in more)_
+- Logged in to DeepSpace and GitHub himself. The agent never saw or handled a password or token.
 
 ## Phase 1 — Engine (no UI)
 
@@ -50,7 +50,8 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 - Try breaking it: edit an entry in the golden test's log, or change a constant, and confirm the pinned hash fails.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Reviewed the engine design (tile-stepped movement, golden-hash replay) and approved moving on to the city mazes.
+- Later rejected the dot-eater rules themselves after playtesting (see Feedback round 1). The deterministic engine and replay design were kept.
 
 ## Phase 2: City mazes (offline)
 
@@ -72,7 +73,7 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 - Optional: `MIN_SUPPORT=0.6 npm run mazes:build` to compare (it prints ASCII mazes). Revert with `npm run mazes:build`.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Approved the maze pipeline, then asked to grow from 7 to 20 cities (Phase 2 roadmap).
 
 ## Phase 3: Solo Daily City and verified scores
 
@@ -111,7 +112,8 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 - Approve or reject the deviations in NOTES.md: no `dailies` collection, the per-attempt salt.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Approved the push and the deploy of server-verified scores.
+- Played signed-in runs on the live site. His account holds the Bengaluru · Night #1 (5,229), recorded only after server replay.
 
 ## Phase 4: Live weather
 
@@ -147,7 +149,8 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 4. Flip the switch OFF and check the next run falls back (stale or demo weather) with no new usage.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Approved the mock-mode deploy, then asked to switch to live ("make it live").
+- Used the owner console at `/ops` on the live site (screenshot shared 2026-11-20). Turning paid integrations on stays his call.
 
 ## Feedback round 1 (after CP4 mock playtest), 2026-11-20
 
@@ -173,7 +176,8 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 - Today's leaderboard may hold scores from the old game (engine v1). Unsubmitted v1 runs are rejected on submit ("engine version changed").
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Playtested the first build and judged it "just Pac-Man". **Chose the heist rework** (police-and-thief chase) over a reskin.
+- Asked how the cops "learn". Answer: they don't; the cops are rule-based. This later became the explicit no-ML decision.
 
 ## Feedback round 2: "graphics one level above, as close to NFS/GTA as possible", 2026-11-20
 
@@ -197,7 +201,7 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 - Not NFS/GTA fidelity: no real road geometry from OSM (the grid maze stays), no vehicle physics, no destruction. It's a stylised, lit 3D city.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- **Chose real 3D (Three.js)** over pseudo-3D or a polish pass, accepting that Live Chase might be descoped (it was).
 
 ## Feedback round 3: "bug: car stuck in the wall", "sound effects", "start, pause and end options", 2026-11-20
 
@@ -216,7 +220,7 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 - **Design note:** pausing gives thinking time in the daily mode. The server realtime check only needs elapsed ≥ 0.9 × game time, so pausing is allowed, but a run must still be submitted within 15 minutes of starting. Quitting a daily run leaves it unsubmitted, and it counts toward the 40/day cap.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Reported the car-stuck-in-the-wall bug from playtesting. Asked for sound effects and for start, pause and end screens.
 
 ## Feedback round 4: "heat, wind and clear look the same", deploy on mock, 2026-11-20
 
@@ -225,7 +229,7 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 - After Tanmay asked: pushed and **deployed (mock mode)**. Live check: `/`, `/home`, `/play`, `/dev/play` return 200, and `/dev/play` runs in **3D** on the live site with no console errors.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Reported that heat, wind and clear looked identical. Asked to deploy on mock mode.
 
 ## Live mode switch, 2026-11-20
 
@@ -241,7 +245,7 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 4. Optional: turn it OFF again and check the next run uses the last live weather (marked "last known weather") with no new calls.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Asked to switch to live mode. Reported the car driving through the solid safehouse (with a screenshot), which led to the flat road pad.
 
 ## Sound fixes, 2026-11-20 (Tanmay: "audio not playing on live", "sound plays when paused", "sounds for pickups and turning")
 
@@ -255,7 +259,7 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 - Listen on the live site: volume balance, and whether the screech or siren gets annoying.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Reported all three sound bugs (silent on live, sound while paused, missing pickup and turn sounds) from playing the live site.
 
 ## Phase 2, Day 1: guest play, lobby, Free Play, 20 cities (2026-11-20)
 
@@ -277,7 +281,8 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 - Sign in for real on the live site after a guest run and check the run is saved and appears on the board.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Agreed the Phase 2 roadmap: guest play, a single lobby, Free Play, 20 cities. Approved creating `RUN_TICKET_SECRET` (piped via `--stdin`, never printed).
+- Played as a guest on the live site; his guest runs appear on the boards.
 
 ## Scope change: no ML; project cleanup (2026-11-20)
 
@@ -292,7 +297,7 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 - Checks: `tsc`, `eslint`, 148 tests and the production build pass; the local server serves `/`, `/play`, `/about`, `/ops` and guest start.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- **Made the decision:** no ML, RL or neural networks anywhere; the cops stay rule-based. Approved the cleanup.
 
 ## Feedback round: lobby, full-screen game, HUD, end screen, guest leaderboard (2026-11-20)
 
@@ -311,7 +316,7 @@ Remove "How it works" and the sign-in note; the lobby must fit without scrolling
 - Sign in after guest runs on the live site and check the scores move to your account.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Asked for every change in this round (no-scroll lobby, full-screen game, readable HUD, end screen, guests on the leaderboard) and played guest runs to check them.
 
 ## Integrations: NewsAPI, ElevenLabs radio voices, email alerts (2026-11-20)
 
@@ -330,7 +335,7 @@ The task suggests ≥ 3 DeepSpace integrations; after dropping Claude/email the 
 - **No real call made yet** for NewsAPI, ElevenLabs or email (the response shapes come from the specs). It needs the deploy plus the kill switch ON, then: the lobby ticker shows real headlines, the first game generates up to 2 radio clips per load, and `/ops` usage counts appear.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- **Chose the three integrations:** NewsAPI ticker, ElevenLabs radio voices, opt-in email alerts. Set the cost rule: owner-paid only, behind the kill switch and caps.
 
 ## All-time leaderboard, pause screen, Drive button (2026-11-20)
 
@@ -346,7 +351,8 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 - Tests: 164 pass (2 new for the all-time rules). Browser: lobby (All-time default, new Drive button), the NYC board shows "🥇 Guest 7093 (you) GUEST 5,104", and the new pause card.
 
 ### Tanmay verified or changed
-- _(Tanmay to fill in)_
+- Proposed a CSV/JSON leaderboard file. Accepted the agent's case for the DeepSpace records database (no writable disk on Workers; it's a platform primitive).
+- Reported that guest scores weren't showing in the lobby and that the pause screen and Drive button didn't match the style.
 
 ## Lobby layout, Quit button, Drive button (2026-11-20)
 - Tanmay asked: Free play box bottom-left above the ticker so the 3D background shows more; "Quit to lobby" icon looked bad and should just say Quit; Drive button still not good.
@@ -487,3 +493,18 @@ Tests: a cop 6 tiles down a straight street sees you on a clear day but not in f
 
 193+ tests pass; tsc and eslint are clean; checked in the browser at 800px and 1440px.
 **Needs human verification:** the ticker once integrations are on.
+
+## Summary: Tanmay's role across the project
+- **Direction:** the heist redesign, real 3D, no ML, guest play, 20 cities, gadgets, race-the-ghost, the F1 car, the fixed start and respawn countdown, the page design and the lobby polish.
+- **Bugs found by playing** (each fixed by the agent; Tanmay kept playtesting each new build):
+  - the car stuck in a wall and a drive-through safehouse
+  - silent or paused audio
+  - laggy turns and turns taken after a junction
+  - the car not rotating and shaking on restart
+  - scores missing from city boards
+  - truncated tabs and the leaderboard overlapping Free Play
+  - the missing Bengaluru night ghost
+  - police catching a disguised car
+  - a stray "0" on the leaderboard
+  - off-topic news headlines
+- **Controls:** approved every push, deploy, secret and paid-call switch; logged in himself; set the cost rules and owns the `/ops` kill switch.
