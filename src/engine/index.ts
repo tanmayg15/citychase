@@ -8,5 +8,6 @@ export {
 export { DEFAULT_PLAN, validatePlan, planOrDefault } from './plan'
 export {
   TICK_RATE, MAX_TICKS, MAX_INPUTS, ENGINE_VERSION,
+  PLAYER_PERIOD, GHOST_PERIOD, FRIGHTENED_PERIOD, EATEN_PERIOD,
   createGame, step, replay, hashState, validateInputLog,
 } from './engine'

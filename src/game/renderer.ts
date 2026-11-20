@@ -17,33 +17,22 @@ export const PALETTE = {
   text: '#e8e0ff',
 }
 
-export interface Pos { x: number; y: number }
+import type { Pos } from './motion'
 
-export function snapshotPositions(s: GameState): Pos[] {
-  return [{ x: s.player.x, y: s.player.y }, ...s.ghosts.map((g) => ({ x: g.x, y: g.y }))]
-}
+/** Walls never change during a game, so they are drawn once per size into an offscreen canvas. */
+const wallCache = new WeakMap<GameConfig, { tile: number; dpr: number; canvas: HTMLCanvasElement }>()
 
-function lerp(a: Pos, b: Pos, t: number): Pos {
-  // Teleports (tunnels, respawns) snap instead of sliding across the board.
-  if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) > 2) return b
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
-}
-
-export function drawFrame(
-  ctx: CanvasRenderingContext2D,
-  cfg: GameConfig,
-  s: GameState,
-  prev: Pos[],
-  alpha: number,
-  tile: number,
-  timeMs: number,
-): void {
+function wallLayer(cfg: GameConfig, tile: number, dpr: number): HTMLCanvasElement {
+  const hit = wallCache.get(cfg)
+  if (hit && hit.tile === tile && hit.dpr === dpr) return hit.canvas
   const { width: w, height: h } = cfg.maze
-  ctx.save()
+  const canvas = document.createElement('canvas')
+  canvas.width = w * tile * dpr
+  canvas.height = h * tile * dpr
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(dpr, dpr)
   ctx.fillStyle = PALETTE.bg
   ctx.fillRect(0, 0, w * tile, h * tile)
-
-  // Walls: dark fill plus a glowing edge wherever a wall meets floor.
   ctx.fillStyle = PALETTE.wallFill
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     if (cfg.maze.cells[y * w + x] === Cell.Wall) ctx.fillRect(x * tile, y * tile, tile, tile)
@@ -64,13 +53,29 @@ export function drawFrame(
     if (!isWall(x + 1, y)) { ctx.moveTo(px + tile, py); ctx.lineTo(px + tile, py + tile) }
   }
   ctx.stroke()
+  wallCache.set(cfg, { tile, dpr, canvas })
+  return canvas
+}
+
+export function drawFrame(
+  ctx: CanvasRenderingContext2D,
+  cfg: GameConfig,
+  s: GameState,
+  pos: Pos[],
+  tile: number,
+  timeMs: number,
+  dpr: number,
+): void {
+  const { width: w, height: h } = cfg.maze
+  ctx.save()
+  ctx.drawImage(wallLayer(cfg, tile, dpr), 0, 0, w * tile, h * tile)
 
   // Orbs and power cores.
   const pulse = 0.75 + 0.25 * Math.sin(timeMs / 180)
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const c = s.cells[y * w + x]
     if (c === Cell.Orb) {
-      ctx.shadowColor = PALETTE.orb; ctx.shadowBlur = tile / 3; ctx.fillStyle = PALETTE.orb
+      ctx.shadowBlur = 0; ctx.fillStyle = PALETTE.orb
       ctx.beginPath(); ctx.arc((x + 0.5) * tile, (y + 0.5) * tile, tile * 0.11, 0, Math.PI * 2); ctx.fill()
     } else if (c === Cell.Core) {
       ctx.shadowColor = PALETTE.core; ctx.shadowBlur = tile; ctx.fillStyle = PALETTE.core
@@ -82,7 +87,7 @@ export function drawFrame(
   const powerLeft = s.powerUntil ? s.powerUntil - s.tick : 0
   s.ghosts.forEach((g, i) => {
     if (g.status === 'house' && s.tick < g.releaseTick - 200) return
-    const p = lerp(prev[i + 1] ?? g, g, alpha)
+    const p = pos[i + 1] ?? g
     const cx = (p.x + 0.5) * tile, cy = (p.y + 0.5) * tile, r = tile * 0.42
     let color = PALETTE.ghosts[i % PALETTE.ghosts.length]
     if (g.status === 'frightened') {
@@ -103,7 +108,7 @@ export function drawFrame(
   })
 
   // Runner: a glowing arrowhead pointing where it is heading.
-  const pp = lerp(prev[0] ?? s.player, s.player, alpha)
+  const pp = pos[0] ?? s.player
   const cx = (pp.x + 0.5) * tile, cy = (pp.y + 0.5) * tile, r = tile * 0.42
   const angle = [0, -Math.PI / 2, 0, Math.PI / 2, Math.PI][s.player.dir === Dir.None ? Dir.Up : s.player.dir]
   ctx.shadowColor = PALETTE.runner; ctx.shadowBlur = tile

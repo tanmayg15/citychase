@@ -8,7 +8,8 @@ import {
   Dir, TICK_RATE, createGame, step,
   type GameConfig, type GameState, type InputLog,
 } from '../engine'
-import { drawFrame, snapshotPositions, type Pos } from './renderer'
+import { Motion } from './motion'
+import { drawFrame } from './renderer'
 
 const TICK_MS = 1000 / TICK_RATE
 /** Large frame gaps (tab hidden, slow device) slow the game down instead of skipping ticks. */
@@ -79,7 +80,7 @@ export function GameCanvas({
     const s = createGame(cfg)
     const log: InputLog = []
     let pending: Dir = Dir.None
-    let prev: Pos[] = snapshotPositions(s)
+    const motion = new Motion(s)
     let acc = 0
     let last = performance.now()
     const startAt = last + COUNTDOWN_MS
@@ -111,7 +112,6 @@ export function GameCanvas({
         acc += Math.min(now - last, MAX_FRAME_MS)
         while (acc >= TICK_MS && s.status === 'playing') {
           acc -= TICK_MS
-          prev = snapshotPositions(s)
           if (pending !== Dir.None) {
             log.push([s.tick, pending])
             step(cfg, s, pending)
@@ -119,11 +119,13 @@ export function GameCanvas({
           } else {
             step(cfg, s)
           }
+          motion.update(s)
         }
       }
       last = now
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      drawFrame(ctx, cfg, s, prev, countdown > 0 ? 1 : Math.min(1, acc / TICK_MS), tileRef.current, now)
+      const alpha = countdown > 0 ? 0 : Math.min(1, acc / TICK_MS)
+      drawFrame(ctx, cfg, s, motion.sample(s, alpha), tileRef.current, now, dpr)
       cb.current.onHud({
         score: s.score, lives: s.lives, status: s.status,
         secondsLeft: Math.ceil((maxTicks - s.tick) / TICK_RATE),
