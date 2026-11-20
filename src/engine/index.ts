@@ -7,6 +7,6 @@ export {
 } from './weather'
 export { DEFAULT_PLAN, validatePlan, planOrDefault } from './plan'
 export {
-  TICK_RATE, MAX_TICKS, MAX_INPUTS,
+  TICK_RATE, MAX_TICKS, MAX_INPUTS, ENGINE_VERSION,
   createGame, step, replay, hashState, validateInputLog,
 } from './engine'

@@ -2,7 +2,7 @@
  * City mazes, generated offline by scripts/mazes/build-mazes.mjs from
  * OpenStreetMap data and shipped in the bundle. No map calls at runtime.
  */
-import { parseMaze, type Maze } from '@/engine'
+import { parseMaze, type Maze } from '../engine'
 import barcelona from './data/barcelona-eixample.json'
 import london from './data/london-soho.json'
 import mumbai from './data/mumbai-fort.json'

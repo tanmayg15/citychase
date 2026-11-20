@@ -17,6 +17,8 @@ export const TICK_RATE = 20
 export const MAX_TICKS = 3 * 60 * TICK_RATE // runs are capped at 3 minutes
 export const MAX_INPUTS = 4000
 export const START_LIVES = 3
+/** Bump when rules change: stored with each run so old replays can be told apart. */
+export const ENGINE_VERSION = 1
 
 export const PLAYER_PERIOD = 4 // ticks per tile (5 tiles/s)
 export const GHOST_PERIOD = 5
