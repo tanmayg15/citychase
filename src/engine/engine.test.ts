@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CLEAR_WEATHER, DEFAULT_PLAN, Dir, MAX_TICKS, canSee,
+  CLEAR_WEATHER, DEFAULT_PLAN, Dir, ENGINE_VERSION, MAX_TICKS, REPLAYABLE_VERSIONS, canSee,
   createGame, hashState, parseMaze, planOrDefault, replay, rngInt, step,
   validateInputLog, validatePlan, weatherToModifiers,
   type GameConfig, type InputLog, type WeatherSnapshot,
@@ -82,6 +82,32 @@ describe('determinism', () => {
         "tick": 586,
       }
     `)
+  })
+})
+
+describe('older runs still replay (REPLAYABLE_VERSIONS)', () => {
+  it('v2 golden run: same score, length and outcome as when it was pinned under v2', () => {
+    const s = replay(config(), randomLog(2026))
+    expect({ score: s.score, tick: s.tick, status: s.status }).toEqual({ score: 291, tick: 586, status: 'busted' })
+  })
+
+  it('direction-only logs play out identically with or without the v3 gadget crates', () => {
+    for (const seed of [1, 7, 42, 99, 2026]) {
+      const cfg = config({ seed })
+      const log = randomLog(seed)
+      const withCrates = replay(cfg, log)
+      const bare = createGame(cfg)
+      bare.crates = []
+      let k = 0
+      while (bare.status === 'playing') step(cfg, bare, k < log.length && log[k][0] === bare.tick ? log[k++][1] : Dir.None)
+      const pick = (s: typeof bare) => ({ score: s.score, tick: s.tick, status: s.status, rng: s.rng, player: s.player, cops: s.cops, loot: s.loot })
+      expect(pick(withCrates)).toEqual(pick(bare))
+    }
+  })
+
+  it('accepts v2 and v3 only', () => {
+    expect(REPLAYABLE_VERSIONS).toEqual([2, 3])
+    expect(REPLAYABLE_VERSIONS).toContain(ENGINE_VERSION)
   })
 })
 

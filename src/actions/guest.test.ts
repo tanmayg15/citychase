@@ -218,6 +218,18 @@ describe('ghost', () => {
     expect(r.data!.inputLog.length).toBeGreaterThan(0)
   })
 
+  it('an older (v2) top run can still race as the ghost; an unknown version is skipped', async () => {
+    const { getGhost } = await import('./runs')
+    const g = await start({ mode: 'free', cityId: 'paris-marais', weather: 'clear' })
+    await claim('alice', await aged(g.ticket), log())
+    const runs = db.get('runs')!
+    const [id, row] = [...runs.entries()][0] as [string, Record<string, unknown>]
+    runs.set(id, { ...row, engineVersion: 2 })
+    expect((await getGhost(tools(), g.board)).data).not.toBeNull()
+    runs.set(id, { ...row, engineVersion: 1 })
+    expect((await getGhost(tools(), g.board)).data).toBeNull()
+  })
+
   it('rejects malformed board ids', async () => {
     const { getGhost } = await import('./runs')
     expect((await getGhost(tools(), 'alltime')).success).toBe(false)

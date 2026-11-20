@@ -23,6 +23,13 @@ export const MAX_INPUTS = 4000
 export const START_LIVES = 3
 /** Bump when rules change: stored with each run so old replays can be told apart. */
 export const ENGINE_VERSION = 3
+/**
+ * Older versions whose recorded runs still replay exactly the same here. v3
+ * only added gadgets (inputs 5-7, which v2 logs never contain) and crates
+ * (which change nothing unless a gadget is used), so a v2 log plays out move
+ * for move as it did. Used to let older top runs race as ghosts.
+ */
+export const REPLAYABLE_VERSIONS: readonly number[] = [2, 3]
 
 export const PLAYER_PERIOD = 4 // ticks per tile (5 tiles/s)
 export const PATROL_PERIOD = 5

@@ -269,12 +269,6 @@ export function drawFrame(
     ctx.fillStyle = 'rgba(138, 92, 255, 0.55)'
     ctx.beginPath(); ctx.arc((o.x + 0.5) * tile, (o.y + 0.5) * tile, tile * 0.42, 0, Math.PI * 2); ctx.fill()
   }
-  if (ghost) {
-    ctx.save()
-    ctx.globalAlpha = 0.45
-    car(ctx, (ghost.x + 0.5) * tile, (ghost.y + 0.5) * tile, ghost.dir || Dir.Up, tile, '#7fe9ff', '#0c3a44')
-    ctx.restore()
-  }
 
   // Police cars.
   s.cops.forEach((c, i) => {
@@ -313,6 +307,13 @@ export function drawFrame(
     g.addColorStop(1, 'rgba(5,6,10,0.9)')
     ctx.fillStyle = g
     ctx.fillRect(0, 0, w * tile, h * tile)
+  }
+  // The ghost goes on top of everything, night included, so you can always find it.
+  if (ghost) {
+    ctx.save()
+    ctx.globalAlpha = 0.75
+    car(ctx, (ghost.x + 0.5) * tile, (ghost.y + 0.5) * tile, ghost.dir || Dir.Up, tile, '#7fe9ff', '#0c3a44')
+    ctx.restore()
   }
   ctx.restore()
 }

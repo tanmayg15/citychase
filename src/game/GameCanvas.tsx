@@ -141,6 +141,7 @@ export function GameCanvas({
   const mapRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<HTMLCanvasElement>(null)
   const nightRef = useRef<HTMLDivElement>(null)
+  const ghostMarkRef = useRef<HTMLDivElement>(null)
   const [mode, setMode] = useState<View>(view)
   const [box, setBox] = useState({ w: 800, h: 520 })
   const boxRef = useRef(box)
@@ -364,6 +365,17 @@ export function GameCanvas({
             nightRef.current.style.background =
               `radial-gradient(circle at ${(at.x * 100).toFixed(1)}% ${(at.y * 100).toFixed(1)}%, transparent 14%, rgba(3,4,8,0.86) 40%)`
           }
+          // At night the darkness would hide the ghost: mark it above the overlay
+          // (clamped to the screen edge when it is off-screen).
+          const mark = ghostMarkRef.current
+          if (mark) {
+            mark.style.display = at.ghost ? 'block' : 'none'
+            if (at.ghost) {
+              mark.style.left = `${(Math.min(0.97, Math.max(0.03, at.ghost.x)) * 100).toFixed(1)}%`
+              mark.style.top = `${(Math.min(0.95, Math.max(0.12, at.ghost.y)) * 100).toFixed(1)}%`
+              mark.style.opacity = ghostPose?.done ? '0.4' : '1'
+            }
+          }
         } catch (e) {
           console.warn('[3d] render failed, falling back to 2D:', e)
           scene.dispose()
@@ -523,6 +535,11 @@ export function GameCanvas({
         <div key="view-3d" className={`relative overflow-hidden ${fill ? '' : 'rounded-xl'}`} style={{ width: box.w, height: box.h, background: '#0b0d12' }}>
           <canvas ref={glRef} data-testid="game-canvas" style={{ width: box.w, height: box.h, display: 'block' }} />
           {night && <div ref={nightRef} className="pointer-events-none absolute inset-0" />}
+          {night && ghost && (
+            <div ref={ghostMarkRef} className="pointer-events-none absolute z-[11] -translate-x-1/2 -translate-y-full rounded-full border border-cyan-300/70 bg-cyan-400/25 px-1.5 py-0.5 text-sm shadow-[0_0_14px_rgba(55,245,255,0.7)]" style={{ display: 'none' }} data-testid="ghost-marker">
+              👻
+            </div>
+          )}
           {overlays}
           {children}
           <canvas

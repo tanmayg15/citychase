@@ -703,7 +703,11 @@ export class CityScene {
   }
 
   /** Renders a frame; returns the getaway car's position on screen (0..1, 0..1). */
-  render(s: GameState, pos: Pos[], timeMs: number, ghost: GhostPose | null = null): { x: number; y: number } {
+  /**
+   * Draw one frame. Returns where the player's car (and the ghost, if any) are
+   * on screen, as 0..1 fractions, for the night overlay and the ghost marker.
+   */
+  render(s: GameState, pos: Pos[], timeMs: number, ghost: GhostPose | null = null): { x: number; y: number; ghost: { x: number; y: number } | null } {
     const dt = this.lastMs ? Math.min(0.1, (timeMs - this.lastMs) / 1000) : 0.016
     this.lastMs = timeMs
     const turn = (cur: number, target: number) => {
@@ -899,7 +903,7 @@ export class CityScene {
       this.camera.lookAt(this.camTarget)
       this.grade.uniforms.time.value = timeMs / 1000
       this.composer.render()
-      return { x: 0.5, y: 0.5 }
+      return { x: 0.5, y: 0.5, ghost: null }
     }
     // Keep the car near the middle of the screen; clamp only a little at the
     // map edges (a hard clamp pushed the car to the screen edge, where it was
@@ -916,7 +920,12 @@ export class CityScene {
     this.grade.uniforms.time.value = timeMs / 1000
     this.composer.render()
     const v = this.player.group.position.clone().project(this.camera)
-    return { x: (v.x + 1) / 2, y: (1 - v.y) / 2 }
+    let g: { x: number; y: number } | null = null
+    if (ghost && this.ghost) {
+      const gv = this.ghost.position.clone().setY(0.3).project(this.camera)
+      g = { x: (gv.x + 1) / 2, y: (1 - gv.y) / 2 }
+    }
+    return { x: (v.x + 1) / 2, y: (1 - v.y) / 2, ghost: g }
   }
 
   dispose() {

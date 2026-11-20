@@ -16,7 +16,7 @@ import type { ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { getCity } from '../cities'
 import {
-  DEFAULT_PLAN, ENGINE_VERSION, TICK_RATE, replay, seedFromString, validateInputLog,
+  DEFAULT_PLAN, ENGINE_VERSION, REPLAYABLE_VERSIONS, TICK_RATE, replay, seedFromString, validateInputLog,
   type CommanderPlan, type InputLog,
 } from '../engine'
 import { buildConfig, dailyFor, runSeed, utcDate } from '../shared/daily'
@@ -328,8 +328,8 @@ export interface GhostData {
 }
 
 /**
- * The best verified run on a board that can still be replayed (same engine
- * version), for "race the ghost". Public: it exposes only a name, a score and
+ * The best verified run on a board that still replays exactly (an engine
+ * version in REPLAYABLE_VERSIONS), for "race the ghost". Public: it exposes only a name, a score and
  * the key presses of a run that is already on the public leaderboard.
  */
 export async function getGhost(tools: ActionTools, board: unknown): Promise<ActionResult<GhostData | null>> {
@@ -341,7 +341,7 @@ export async function getGhost(tools: ActionTools, board: unknown): Promise<Acti
     const run = await tools.get('runs', row.runId)
     if (!run.success) continue
     const d = run.data.record.data as unknown as RunRow & { inputLog?: InputLog }
-    if (d.status !== 'verified' || d.engineVersion !== ENGINE_VERSION || !Array.isArray(d.inputLog)) continue
+    if (d.status !== 'verified' || !REPLAYABLE_VERSIONS.includes(d.engineVersion) || !Array.isArray(d.inputLog)) continue
     return {
       success: true,
       data: { name: row.name, score: row.score, cityId: d.cityId, seed: d.seed, weather: d.weather, plan: d.plan, inputLog: d.inputLog },

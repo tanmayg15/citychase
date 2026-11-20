@@ -110,7 +110,8 @@ describe('owner ops', () => {
       ['e', { date: '2000-01-01', status: 'verified' }],
     ]))
     const s = await getOpsStatus({ userId: 'owner', params: {}, tools: fakeTools(db), env, callerJwt: '' })
-    expect(s.success && s.data.runsToday).toEqual({ verified: 2, rejected: 1, started: 1 })
-    expect(s.success && Object.keys(s.data.caps).sort()).toEqual(['email', 'news', 'tts', 'weather'])
+    const data = (s.success ? s.data : {}) as { runsToday: unknown; caps: Record<string, unknown> }
+    expect(data.runsToday).toEqual({ verified: 2, rejected: 1, started: 1 })
+    expect(Object.keys(data.caps).sort()).toEqual(['email', 'news', 'tts', 'weather'])
   })
 })

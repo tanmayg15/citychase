@@ -444,3 +444,11 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 **Needs human verification:**
 - Settings and Ops while signed in (the agent can't sign in).
 - New radio voices: they need integrations ON for the ElevenLabs clips, at 2 new clips per page load. 10 new clips, under the 20/day TTS cap.
+
+## 2026-11-20 — Fix: no ghost on boards whose #1 run predates the gadgets release
+**Cause:** the Bengaluru · Night #1 run was recorded under rules v2 (before release #19), and the ghost lookup only accepted v3 runs. The live `/api/ghost?board=free:bengaluru-mg-road:night` returned null.
+**Agent did:**
+- Added `REPLAYABLE_VERSIONS = [2, 3]`. v3 only added gadgets (input codes 5–7, never in v2 logs) and crates (no effect without gadgets). Tests prove it: the pinned v2 golden run keeps its exact v2 score, ticks and outcome, and 5 direction-only logs play out identically with or without crates. A v1 run is still skipped.
+- Night also hid the ghost behind the darkness. It now shows a 👻 marker above the night overlay in 3D (clamped to the screen edge), and on the minimap it's drawn above the night mask.
+- Checked locally: Bengaluru · Night with the ghost shows the race in the HUD and the moving 👻 marker. tsc and eslint are clean; 191 tests pass.
+**Needs human verification:** after deploy, race the existing Bengaluru night #1.
