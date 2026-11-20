@@ -376,3 +376,9 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
   - Issues found in testing and fixed: (1) everything washed out to white, because the kit's pastel colormap was over-lit by our sun/sky/environment light (toned down per material); (2) trees were mint/teal by design (`leafsGreen` baseColor 0.16, 0.79, 0.67), recoloured to natural greens.
   - Performance (lobby 3D, this Mac): median frame 8.3 ms, p95 16.6 ms.
 - 166 tests pass; the production build includes `models/`.
+
+## Faster lobby background (2026-11-20)
+- Tanmay: "the background takes 1-2 s to load".
+- **Measured first (live, warm cache):** the 3D chunk was requested at 449 ms (only after the lobby rendered), models finished at 623 ms, but **23 separate `colormap.png` requests** (each GLB fetched and decoded its own copy of its kit's texture) ran until **1351 ms**.
+- **Fixes:** `THREE.Cache.enabled` (each texture is fetched and decoded once: 23 → 2 requests); `preloadCity()` starts the 3D chunk and models at module load of the lobby and play pages; the canvas fades in after its first real frame instead of popping from black; `/models/*` gets `Cache-Control: max-age=86400, stale-while-revalidate` for repeat visits.
+- **Re-measured (local):** 2 texture requests, done by 293 ms; 3D chunk requested at 242 ms.

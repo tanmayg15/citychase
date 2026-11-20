@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { AuthOverlay, signOut, useAuth, useAuthUser, useQuery } from 'deepspace'
 import { CITY_MAZES, getCity } from '@/cities'
 import { callAction, claimGuestIfAny, loadGuest } from '@/game/api'
-import { AttractScene } from '@/game/AttractScene'
+import { AttractScene, preloadCity } from '@/game/AttractScene'
 import { dailyFor, utcDate, weatherLabel } from '@/game/daily'
 import { Leaderboard } from '@/game/Leaderboard'
 import { getSfx } from '@/game/sound'
@@ -28,6 +28,9 @@ const TICKER = [
 ]
 
 const panel = 'rounded-2xl border border-white/10 bg-black/50 backdrop-blur-md'
+
+// Begin fetching the 3D engine + models as soon as this page's code loads.
+preloadCity()
 
 export default function Lobby() {
   const navigate = useNavigate()

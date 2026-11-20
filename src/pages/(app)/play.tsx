@@ -14,6 +14,7 @@ import { getCity } from '@/cities'
 import { MAX_TICKS, TICK_RATE, type CommanderPlan, type GameState, type InputLog } from '@/engine'
 import { callAction, claimGuestIfAny, guestStart, guestSubmit, loadGuest, saveGuest, type Guest } from '@/game/api'
 import { buildConfig } from '@/game/daily'
+import { preloadCity } from '@/game/AttractScene'
 import { GameCanvas, type Hud } from '@/game/GameCanvas'
 import { HudOverlay } from '@/game/HudOverlay'
 import { ResultScreen, type RunStats } from '@/game/ResultScreen'
@@ -48,6 +49,9 @@ type Phase =
   | { kind: 'playing'; run: Run }
   | { kind: 'result'; run: Run; stats: RunStats; verified: Verified | null; error?: string }
   | { kind: 'error'; message: string }
+
+// Begin fetching the 3D engine + models as soon as this page's code loads.
+preloadCity()
 
 export default function PlayPage() {
   const [params] = useSearchParams()

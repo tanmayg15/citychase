@@ -87,6 +87,10 @@ function tame<T extends THREE.Object3D>(root: T): T {
   return root
 }
 
+// Every model in a kit points at the same Textures/colormap.png. Without the
+// shared cache each GLB fetched and decoded its own copy (23 requests, ~0.8 s).
+THREE.Cache.enabled = true
+
 let cache: Promise<Models> | null = null
 
 export function loadModels(base = '/models/'): Promise<Models> {

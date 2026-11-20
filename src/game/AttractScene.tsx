@@ -3,7 +3,7 @@
  * slowly orbiting camera. Purely decorative (no scores, no input). Falls back
  * to a dark gradient if WebGL is unavailable.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   CLEAR_WEATHER, DEFAULT_PLAN, Dir, TICK_RATE, createGame, step, type WeatherSnapshot,
 } from '../engine'
@@ -15,8 +15,20 @@ import { Motion } from './motion'
 
 const TICK_MS = 1000 / TICK_RATE
 
+/**
+ * Start downloading the 3D engine chunk and the city models right away, in
+ * parallel with the rest of the page, instead of after the lobby renders.
+ * Safe to call many times.
+ */
+let preloading: Promise<unknown> | null = null
+export function preloadCity(): void {
+  if (preloading || typeof window === 'undefined' || !supports3d()) return
+  preloading = Promise.all([import('./three/CityScene'), import('./three/assets').then((m) => m.loadModels())]).catch(() => { preloading = null })
+}
+
 export function AttractScene({ cityId, weather = CLEAR_WEATHER }: { cityId: string; weather?: WeatherSnapshot }) {
   const ref = useRef<HTMLCanvasElement>(null)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const canvas = ref.current
@@ -30,6 +42,7 @@ export function AttractScene({ cityId, weather = CLEAR_WEATHER }: { cityId: stri
     let motion = new Motion(s)
     let acc = 0
     let last = performance.now()
+    let shown = false
 
     const resize = () => {
       if (!scene) return
@@ -56,6 +69,7 @@ export function AttractScene({ cityId, weather = CLEAR_WEATHER }: { cityId: stri
           }
         }
         scene?.render(s, motion.sample(s, acc / TICK_MS), now)
+        if (!shown) { shown = true; setReady(true) } // fade in after the first real frame
         raf = requestAnimationFrame(frame)
       }
       raf = requestAnimationFrame(frame)
@@ -72,7 +86,7 @@ export function AttractScene({ cityId, weather = CLEAR_WEATHER }: { cityId: stri
 
   return (
     <div className="fixed inset-0 -z-10" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1b1240, #07030f 70%)' }}>
-      <canvas ref={ref} className="h-full w-full" aria-hidden="true" />
+      <canvas ref={ref} className="h-full w-full transition-opacity duration-700" style={{ opacity: ready ? 1 : 0 }} aria-hidden="true" />
       <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(7,3,15,0.88) 0%, rgba(7,3,15,0.35) 45%, rgba(7,3,15,0.55) 100%)' }} />
     </div>
   )
