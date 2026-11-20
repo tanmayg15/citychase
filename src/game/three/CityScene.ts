@@ -18,6 +18,12 @@ import { loadModels, type ModelParts, type Models } from './assets'
 import { makeGetawayCar, makePoliceCar, modelGetawayCar, modelPoliceCar, type CarParts } from './cars'
 import { asphaltTexture, facadeTextures, glowTexture, roofTexture } from './textures'
 
+/** Gadget colours, shared by crates and HUD. */
+const GADGET_COLOR = { nitro: 0xff6a1a, oil: 0x8a5cff, disguise: 0x2fd8ff } as const
+
+/** A ghost marker for the car: drawn where the ghost run's car is. */
+export interface GhostPose { x: number; y: number; dir: Dir; done: boolean }
+
 const YAW = [0, Math.PI / 2, 0, -Math.PI / 2, Math.PI] // Dir → rotation.y (+X forward)
 const INSET = 0.14 // sidewalk width between road and building face
 const FACADE_TINTS = [0xd9cfc0, 0xb8b2a6, 0xa86b54, 0x8fa3b5, 0xe8e4dc, 0x9c8f7c, 0x7f8c8d, 0xc2a68a]
@@ -129,6 +135,12 @@ export class CityScene {
   private wind: { debris: THREE.InstancedMesh; streaks: THREE.LineSegments; dir: THREE.Vector3; speed: number; seeds: Float32Array } | null = null
   /** Heat: shimmering haze rising off the road. */
   private haze: THREE.Sprite[] = []
+  private crates: THREE.Mesh[] = []
+  private oils: THREE.Mesh[] = []
+  private nitroGlow!: THREE.Sprite
+  private disguiseGlow!: THREE.Sprite
+  private ghost: THREE.Group | null = null
+  private ghostYaw = Math.PI / 2
   private lastMs = 0
   private disposables: Array<{ dispose(): void }> = []
   private readonly night: boolean
@@ -168,6 +180,8 @@ export class CityScene {
     this.player.group.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.renderOrder === 0) o.castShadow = true })
     if (this.player.headlight) this.player.headlight.intensity = this.night ? 14 : 4
     this.scene.add(this.player.group)
+    this.ghost = this.makeGhost()
+    this.scene.add(this.ghost)
     for (let i = 0; i < cfg.plan.cops.length; i++) {
       const c = this.models ? modelPoliceCar(this.models.police) : makePoliceCar()
       this.cops.push(c)
@@ -192,6 +206,24 @@ export class CityScene {
 
     const sp = cfg.maze.playerSpawn
     this.camTarget.set(sp.x + 0.5, 0, sp.y + 0.5)
+  }
+
+  /** Translucent cyan copy of the getaway car for "race the ghost". Hidden until used. */
+  private makeGhost(): THREE.Group {
+    const src = this.models ? modelGetawayCar(this.models.race).group : makeGetawayCar().group
+    const mat = new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true, opacity: 0.38, depthWrite: false, blending: THREE.AdditiveBlending })
+    this.disposables.push(mat)
+    const g = new THREE.Group()
+    src.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh || m.renderOrder !== 0) return
+      m.updateWorldMatrix(true, false)
+      const copy = new THREE.Mesh(m.geometry, mat)
+      copy.applyMatrix4(m.matrixWorld)
+      g.add(copy)
+    })
+    g.visible = false
+    return g
   }
 
   // ─── Setup ────────────────────────────────────────────────────────────────
@@ -603,6 +635,31 @@ export class CityScene {
       this.scene.add(g)
     }
 
+    // Gadget crates: glowing boxes, coloured by the gadget inside.
+    const crateGeo = new THREE.BoxGeometry(0.24, 0.24, 0.24)
+    for (let i = 0; i < 6; i++) {
+      const c = new THREE.Mesh(crateGeo, new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0xffffff, emissiveIntensity: 1.4, roughness: 0.4 }))
+      c.castShadow = true
+      c.visible = false
+      this.crates.push(c)
+      this.scene.add(c)
+    }
+    // Oil slicks: dark glossy puddles on the road.
+    const oilGeo = new THREE.CircleGeometry(0.4, 24).rotateX(-Math.PI / 2)
+    const oilMat = new THREE.MeshPhysicalMaterial({ color: 0x0a0612, metalness: 0.2, roughness: 0.05, clearcoat: 1, sheen: 1, sheenColor: new THREE.Color(0x8a5cff) })
+    for (let i = 0; i < 3; i++) {
+      const o = new THREE.Mesh(oilGeo, oilMat)
+      o.position.y = 0.018
+      o.visible = false
+      this.oils.push(o)
+      this.scene.add(o)
+    }
+    // Nitro flame behind the car, disguise shimmer around it.
+    this.nitroGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: GADGET_COLOR.nitro, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }))
+    this.disguiseGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: GADGET_COLOR.disguise, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }))
+    this.nitroGlow.visible = this.disguiseGlow.visible = false
+    this.scene.add(this.nitroGlow, this.disguiseGlow)
+
     // Smoke puffs that surround blinded cops.
     const puffMat = new THREE.SpriteMaterial({ map: glow, color: 0xcfd4dc, transparent: true, opacity: 0.55, depthWrite: false })
     for (let i = 0; i < s.plan.cops.length; i++) {
@@ -646,7 +703,7 @@ export class CityScene {
   }
 
   /** Renders a frame; returns the getaway car's position on screen (0..1, 0..1). */
-  render(s: GameState, pos: Pos[], timeMs: number): { x: number; y: number } {
+  render(s: GameState, pos: Pos[], timeMs: number, ghost: GhostPose | null = null): { x: number; y: number } {
     const dt = this.lastMs ? Math.min(0.1, (timeMs - this.lastMs) / 1000) : 0.016
     this.lastMs = timeMs
     const turn = (cur: number, target: number) => {
@@ -674,6 +731,31 @@ export class CityScene {
       this.playerYaw = turn(this.playerYaw, Math.atan2(-vz, vx))
     }
     this.player.group.rotation.y = this.playerYaw
+
+    // Gadget effects on the car.
+    const nitro = s.tick < s.nitroUntil, disguised = s.tick < s.disguiseUntil
+    this.nitroGlow.visible = nitro
+    if (nitro) {
+      const back = this.playerYaw + Math.PI
+      this.nitroGlow.position.set(pp.x + 0.5 + Math.cos(back) * 0.5, 0.18, pp.y + 0.5 - Math.sin(back) * 0.5)
+      this.nitroGlow.scale.setScalar(0.55 + 0.15 * Math.sin(timeMs / 40))
+    }
+    this.disguiseGlow.visible = disguised
+    if (disguised) {
+      this.disguiseGlow.position.set(pp.x + 0.5, 0.25, pp.y + 0.5)
+      this.disguiseGlow.scale.setScalar(1.3 + 0.2 * Math.sin(timeMs / 150))
+    }
+
+    // Ghost car.
+    if (this.ghost) {
+      this.ghost.visible = !!ghost
+      if (ghost) {
+        this.ghost.position.set(ghost.x + 0.5, 0.01, ghost.y + 0.5)
+        if (ghost.dir !== Dir.None) this.ghostYaw = turn(this.ghostYaw, YAW[ghost.dir])
+        this.ghost.rotation.y = this.ghostYaw
+        ;((this.ghost.children[0] as THREE.Mesh)?.material as THREE.MeshBasicMaterial).opacity = ghost.done ? 0.15 : 0.38
+      }
+    }
 
     // Police cars, light bars and smoke.
     const flip = Math.floor(timeMs / 140) % 2 === 0
@@ -732,6 +814,19 @@ export class CityScene {
       const b = s.smokes[i]
       g.visible = !!b && !b.taken
       if (b) g.position.set(b.x + 0.5, 0, b.y + 0.5)
+    })
+    this.crates.forEach((c, i) => {
+      const b = s.crates[i]
+      c.visible = !!b && !b.taken
+      if (!c.visible) return
+      ;(c.material as THREE.MeshStandardMaterial).emissive.setHex(GADGET_COLOR[b.kind])
+      c.position.set(b.x + 0.5, 0.28 + bob, b.y + 0.5)
+      c.rotation.set(0.5, timeMs / 500, 0.3)
+    })
+    this.oils.forEach((o, i) => {
+      const k = s.oils[i]
+      o.visible = !!k
+      if (k) o.position.set(k.x + 0.5, 0.018, k.y + 0.5)
     })
     const sh = this.scene.getObjectByName('safehouse')!
     sh.position.set(s.exit.x + 0.5, 0, s.exit.y + 0.5)

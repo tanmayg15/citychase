@@ -76,7 +76,7 @@ describe('determinism', () => {
     const s = replay(config(), randomLog(2026))
     expect({ hash: hashState(s), score: s.score, tick: s.tick, status: s.status }).toMatchInlineSnapshot(`
       {
-        "hash": "f4daa04a",
+        "hash": "3343c674",
         "score": 291,
         "status": "busted",
         "tick": 586,

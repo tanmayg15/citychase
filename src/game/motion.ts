@@ -5,7 +5,7 @@
  * hopping and pausing. Render-only: never feeds back into the engine.
  */
 import {
-  Dir, PLAYER_PERIOD, canMove, copPeriod, type GameState, type Maze,
+  Dir, canMove, copPeriod, playerPeriod, type GameState, type Maze,
 } from '../engine'
 
 const DX = [0, 0, 1, 0, -1]
@@ -33,7 +33,7 @@ export interface Pos { x: number; y: number }
 interface Track { from: Pos; to: Pos; moveTick: number; period: number }
 
 function periodOf(s: GameState, i: number): number {
-  if (i === 0) return PLAYER_PERIOD
+  if (i === 0) return playerPeriod(s)
   return copPeriod(s.cops[i - 1])
 }
 
@@ -85,14 +85,15 @@ export class Motion {
    */
   player(maze: Maze, s: GameState, alpha: number): Pos {
     const p = s.player
-    const k = Math.min(1, (p.clock + alpha) / PLAYER_PERIOD)
+    const period = playerPeriod(s)
+    const k = Math.min(1, (p.clock + alpha) / period)
     let tx = p.x, ty = p.y
     // Only draw the "arriving" half if the car really entered this tile on its
     // last move. A parked car (against a wall, or just started) keeps counting
     // its clock too, and drawing it arriving every cycle made it shake.
     const t = this.tracks[0]
     const justArrived = !!t && t.to.x === p.x && t.to.y === p.y && (t.from.x !== t.to.x || t.from.y !== t.to.y) &&
-      s.tick - t.moveTick < PLAYER_PERIOD
+      s.tick - t.moveTick < period
     if (k < 0.5) {
       if (justArrived && p.dir !== Dir.None) { tx = p.x - DX[p.dir] * (0.5 - k); ty = p.y - DY[p.dir] * (0.5 - k) }
     } else {
@@ -129,6 +130,6 @@ export function shouldHoldTurn(maze: Maze, s: GameState, dir: Dir): boolean {
   if (p.dir === Dir.None || dir === p.dir) return false
   const reverse = (p.dir + 1) % 4 + 1 === dir // Up<->Down, Left<->Right
   if (reverse) return false
-  if (p.clock * 2 < PLAYER_PERIOD) return false // still before the centre: turn here
+  if (p.clock * 2 < playerPeriod(s)) return false // still before the centre: turn here
   return canMove(maze, p.x, p.y, dir) // only matters if the turn is possible here
 }

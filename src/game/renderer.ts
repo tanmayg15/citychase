@@ -228,6 +228,8 @@ function safehouse(ctx: CanvasRenderingContext2D, x: number, y: number, tile: nu
   ctx.restore()
 }
 
+const GADGET_FILL = { nitro: '#ff6a1a', oil: '#8a5cff', disguise: '#2fd8ff' } as const
+
 // ─── Frame ──────────────────────────────────────────────────────────────────
 
 export function drawFrame(
@@ -238,6 +240,7 @@ export function drawFrame(
   tile: number,
   timeMs: number,
   dpr: number,
+  ghost: { x: number; y: number; dir: Dir } | null = null,
 ): void {
   const { width: w, height: h } = cfg.maze
   ctx.save()
@@ -256,6 +259,22 @@ export function drawFrame(
   const pulse = 0.85 + 0.15 * Math.sin(timeMs / 220)
   for (const l of s.loot) if (!l.taken) lootIcon(ctx, (l.x + 0.5) * tile, (l.y + 0.5) * tile, tile, pulse)
   for (const b of s.smokes) if (!b.taken) smokeIcon(ctx, (b.x + 0.5) * tile, (b.y + 0.5) * tile, tile)
+  for (const b of s.crates) {
+    if (b.taken) continue
+    ctx.fillStyle = GADGET_FILL[b.kind]
+    const r = tile * 0.24
+    ctx.fillRect((b.x + 0.5) * tile - r, (b.y + 0.5) * tile - r, r * 2, r * 2)
+  }
+  for (const o of s.oils) {
+    ctx.fillStyle = 'rgba(138, 92, 255, 0.55)'
+    ctx.beginPath(); ctx.arc((o.x + 0.5) * tile, (o.y + 0.5) * tile, tile * 0.42, 0, Math.PI * 2); ctx.fill()
+  }
+  if (ghost) {
+    ctx.save()
+    ctx.globalAlpha = 0.45
+    car(ctx, (ghost.x + 0.5) * tile, (ghost.y + 0.5) * tile, ghost.dir || Dir.Up, tile, '#7fe9ff', '#0c3a44')
+    ctx.restore()
+  }
 
   // Police cars.
   s.cops.forEach((c, i) => {

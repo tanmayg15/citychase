@@ -12,8 +12,10 @@ import type { WeatherRecord } from './weather-source'
 
 const glass = 'rounded-2xl border border-white/15 bg-black/55 shadow-lg backdrop-blur-md'
 
-export function HudOverlay({ hud, city, weather, mode }: {
+export function HudOverlay({ hud, city, weather, mode, ghostName }: {
   hud: Hud | null
+  /** Set when racing a ghost: whose run it is. */
+  ghostName?: string
   city: CityMaze
   weather: WeatherRecord
   mode: 'daily' | 'free'
@@ -69,6 +71,15 @@ export function HudOverlay({ hud, city, weather, mode }: {
             ))}
           </div>
         </div>
+        {ghostName && hud && hud.ghostScore !== null && (
+          <div className={`${glass} border-cyan-300/50 px-4 py-1 text-sm`} data-testid="ghost-race">
+            👻 <span className="text-cyan-200">{ghostName}</span>{' '}
+            <span className="font-mono tabular-nums">{hud.ghostScore.toLocaleString('en-US')}</span>{' '}
+            <span className={`ml-1 font-bold ${hud.score >= hud.ghostScore ? 'text-emerald-300' : 'text-red-300'}`}>
+              {hud.score >= hud.ghostScore ? `+${(hud.score - hud.ghostScore).toLocaleString('en-US')} ahead` : `${(hud.ghostScore - hud.score).toLocaleString('en-US')} behind`}
+            </span>
+          </div>
+        )}
         <div className={`${glass} px-4 py-1.5 text-sm font-semibold ${hud?.exitOpen ? 'border-emerald-400/60 text-emerald-300' : 'text-white/80'}`}>
           {hud?.exitOpen ? '🟢 Safehouse open: get to the H' : `🔒 ${need} more loot to open the safehouse`}
         </div>

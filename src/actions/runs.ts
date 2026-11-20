@@ -316,3 +316,36 @@ export const claimRun: ActionHandler<Env> = async ({ userId, params, tools, env 
   const { v: _v, id: _id, ...run } = t
   return verifyAndRecord(env, tools, userId, runId, run, params.inputLog, false)
 }
+
+export interface GhostData {
+  name: string
+  score: number
+  cityId: string
+  seed: number
+  weather: WeatherRecord
+  plan: CommanderPlan
+  inputLog: InputLog
+}
+
+/**
+ * The best verified run on a board that can still be replayed (same engine
+ * version), for "race the ghost". Public: it exposes only a name, a score and
+ * the key presses of a run that is already on the public leaderboard.
+ */
+export async function getGhost(tools: ActionTools, board: unknown): Promise<ActionResult<GhostData | null>> {
+  if (typeof board !== 'string' || !/^(daily:\d{4}-\d{2}-\d{2}|free:[a-z0-9-]+:[a-z]+)$/.test(board)) return fail('bad board')
+  const top = await tools.query('scores', { where: { board }, orderBy: 'score', orderDir: 'desc', limit: 50 })
+  if (!top.success) return top
+  for (const r of top.data.records) {
+    const row = r.data as unknown as { runId: string; name: string; score: number }
+    const run = await tools.get('runs', row.runId)
+    if (!run.success) continue
+    const d = run.data.record.data as unknown as RunRow & { inputLog?: InputLog }
+    if (d.status !== 'verified' || d.engineVersion !== ENGINE_VERSION || !Array.isArray(d.inputLog)) continue
+    return {
+      success: true,
+      data: { name: row.name, score: row.score, cityId: d.cityId, seed: d.seed, weather: d.weather, plan: d.plan, inputLog: d.inputLog },
+    }
+  }
+  return { success: true, data: null }
+}

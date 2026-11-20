@@ -36,7 +36,7 @@ import {
 } from 'deepspace/worker'
 import type { ActionResult, ActionTools, VerifyResult } from 'deepspace/worker'
 import { actions } from '../actions/index.js'
-import { guestStart, guestSubmit } from '../actions/runs.js'
+import { getGhost, guestStart, guestSubmit } from '../actions/runs.js'
 import { getNews, getRadio } from '../actions/media.js'
 import { dailyFor, utcDate } from '../game/daily.js'
 import { integrations } from '../integrations.js'
@@ -61,6 +61,12 @@ export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: Resolve
     const cityId = dailyFor(utcDate()).cityId
     const headlines = await getNews(c.env, tools, cityId, 'public')
     return c.json({ success: true, data: { cityId, headlines } })
+  })
+  // Public read of a board's best replayable run, for "race the ghost".
+  app.get('/api/ghost', async (c) => {
+    const tools = createActionTools(c.env, 'guest', '')
+    const result = await getGhost(tools, c.req.query('board'))
+    return c.json(result as unknown as Record<string, unknown>, result.success ? 200 : 400)
   })
   // Public read of the police radio clips (generated once each, then cached).
   app.get('/api/radio', async (c) => {

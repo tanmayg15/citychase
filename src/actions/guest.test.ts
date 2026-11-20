@@ -205,3 +205,22 @@ describe('regression: same player, same day, several boards', () => {
     expect(leaderboardSchema.uniqueOn).toEqual(['board', 'userId'])
   })
 })
+
+describe('ghost', () => {
+  it('returns the best replayable run on a board, or null when there is none', async () => {
+    const { getGhost } = await import('./runs')
+    const g = await start({ mode: 'free', cityId: 'paris-marais', weather: 'clear' })
+    expect((await getGhost(tools(), g.board)).data).toBeNull()
+    await claim('alice', await aged(g.ticket), log())
+    const r = await getGhost(tools(), g.board)
+    expect(r.success).toBe(true)
+    expect(r.data).toMatchObject({ cityId: 'paris-marais', seed: g.seed })
+    expect(r.data!.inputLog.length).toBeGreaterThan(0)
+  })
+
+  it('rejects malformed board ids', async () => {
+    const { getGhost } = await import('./runs')
+    expect((await getGhost(tools(), 'alltime')).success).toBe(false)
+    expect((await getGhost(tools(), { evil: 1 })).success).toBe(false)
+  })
+})

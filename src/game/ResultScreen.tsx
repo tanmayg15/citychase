@@ -44,7 +44,7 @@ function useCountUp(target: number, ms = 1200): number {
 }
 
 export function ResultScreen({
-  cityId, weather, board, stats, verified, newBest, guestName, onAgain, onSignIn, error,
+  cityId, weather, board, stats, verified, newBest, guestName, onAgain, onSignIn, error, ghost,
 }: {
   cityId: string
   weather: WeatherRecord
@@ -54,6 +54,8 @@ export function ResultScreen({
   verified: boolean | null
   newBest?: boolean
   guestName?: string
+  /** Ghost race result: the ghost's name and final score. */
+  ghost?: { name: string; score: number } | null
   onAgain: () => void
   onSignIn?: () => void
   error?: string
@@ -102,6 +104,14 @@ export function ResultScreen({
               </div>
             ))}
           </div>
+
+          {ghost && (
+            <div className={`mt-5 rounded-2xl border px-4 py-3 text-sm ${stats.score > ghost.score ? 'border-emerald-400/50 bg-emerald-400/10' : 'border-cyan-400/40 bg-cyan-400/10'}`} data-testid="ghost-result">
+              👻 {stats.score > ghost.score
+                ? <>You beat <strong>{ghost.name}</strong>'s ghost by {(stats.score - ghost.score).toLocaleString('en-US')} points!</>
+                : <><strong>{ghost.name}</strong>'s ghost won by {(ghost.score - stats.score).toLocaleString('en-US')} points ({ghost.score.toLocaleString('en-US')}).</>}
+            </div>
+          )}
 
           {error && <p className="mt-4 text-sm text-red-300" data-testid="run-error">{error}</p>}
 

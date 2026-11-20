@@ -12,6 +12,23 @@ export enum Dir {
   Left = 4,
 }
 
+/**
+ * Gadget activations share the input log with directions: [tick, 5|6|7].
+ * Nitro doubles your speed briefly; Oil leaves a slick that spins out the
+ * next cop to drive over it; Disguise makes every cop lose sight of you.
+ */
+export enum Gadget {
+  Nitro = 5,
+  Oil = 6,
+  Disguise = 7,
+}
+
+export type GadgetKind = 'nitro' | 'oil' | 'disguise'
+export const GADGET_KINDS: GadgetKind[] = ['nitro', 'oil', 'disguise']
+
+/** One input on one tick: a direction or a gadget. */
+export type Input = Dir | Gadget
+
 /** Maze cells. Orb tiles from the maze files are plain street; Core tiles are smoke-bomb spots. */
 export enum Cell {
   Empty = 0,
@@ -70,7 +87,7 @@ export interface GameConfig {
 }
 
 /** Sparse input log: [tick, dir] entries, strictly increasing ticks. */
-export type InputLog = Array<[number, Dir]>
+export type InputLog = Array<[number, Input]>
 
 export interface PlayerState {
   x: number
@@ -124,6 +141,9 @@ export type GameEvent =
   | { type: 'spotted'; cop: number }
   | { type: 'caught'; livesLeft: number }
   | { type: 'end'; status: GameStatus }
+  | { type: 'gadget'; kind: GadgetKind }
+  | { type: 'crate'; kind: GadgetKind }
+  | { type: 'spinout'; cop: number }
 
 export interface GameState {
   tick: number
@@ -143,6 +163,14 @@ export interface GameState {
   player: PlayerState
   cops: CopState[]
   pauseUntil: number
+  /** Gadget charges you are carrying. */
+  gadgets: Record<GadgetKind, number>
+  /** Gadget crates on the map; each refills one charge of `kind`. */
+  crates: Array<Pickup & { kind: GadgetKind }>
+  /** Oil slicks on the road; gone after `until` or once a cop hits one. */
+  oils: Array<{ x: number; y: number; until: number }>
+  nitroUntil: number
+  disguiseUntil: number
   /** Events from the most recent step only. Not part of the state hash. */
   events: GameEvent[]
 }

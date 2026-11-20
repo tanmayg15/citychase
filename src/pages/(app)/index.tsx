@@ -52,6 +52,14 @@ export default function Lobby() {
   useEffect(() => {
     try { localStorage.setItem('citychase:freeplay', JSON.stringify({ cityId, weather })) } catch { /* storage blocked */ }
   }, [cityId, weather])
+  // Opponent: drive solo, or race the ghost of the board's #1 run.
+  const [ghost, setGhost] = useState(false)
+  useEffect(() => { try { setGhost(localStorage.getItem('citychase:ghost') === '1') } catch { /* storage blocked */ } }, [])
+  const pickGhost = (on: boolean) => {
+    setGhost(on)
+    try { localStorage.setItem('citychase:ghost', on ? '1' : '0') } catch { /* storage blocked */ }
+  }
+  const vs = ghost ? 'ghost=1' : ''
   const [board, setBoard] = useState<'alltime' | 'daily' | 'free'>('alltime')
   const [guestName, setGuestName] = useState<string | null>(null)
   useEffect(() => setGuestName(loadGuest()?.guestName ?? null), [])
@@ -93,7 +101,17 @@ export default function Lobby() {
       <AttractScene cityId={daily.cityId} weather={bgWeather} />
 
       <header className="flex shrink-0 items-center justify-between px-5 py-3 sm:px-8">
-        <span className="text-2xl font-black tracking-tight" style={{ textShadow: '0 0 18px #ff8a1f' }}>CITY CHASE</span>
+        <div className="flex items-center gap-3">
+          <span className="text-2xl font-black tracking-tight" style={{ textShadow: '0 0 18px #ff8a1f' }}>CITY CHASE</span>
+          <div className="flex rounded-full bg-black/50 p-0.5 text-sm backdrop-blur" role="radiogroup" aria-label="Opponent" title="Race the ghost of the board's #1 run">
+            {([[false, '🚗 Solo'], [true, '👻 Race #1 ghost']] as const).map(([on, label]) => (
+              <button key={label} role="radio" aria-checked={ghost === on} onClick={() => pickGhost(on)} data-testid={on ? 'opponent-ghost' : 'opponent-solo'}
+                className={`whitespace-nowrap rounded-full px-3 py-1 ${ghost === on ? 'bg-cyan-400/30 text-white' : 'text-white/60 hover:text-white'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         {isSignedIn ? (
           <div className="flex items-center gap-2">
             {alerts !== null && (
@@ -114,8 +132,8 @@ export default function Lobby() {
         )}
       </header>
 
-      <main className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 pb-14 sm:px-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
-        <div className="flex min-h-0 flex-col justify-between gap-4">
+      <main className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-5 pb-14 sm:px-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:content-stretch lg:overflow-hidden">
+        <div className="flex flex-col justify-between gap-4 lg:min-h-0">
           {/* Today's heist */}
           <section className="shrink-0 rounded-2xl border border-orange-400/30 bg-black/50 p-5 backdrop-blur-md">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -132,7 +150,7 @@ export default function Lobby() {
                 )}
               </div>
               <button
-                onClick={() => go('/play')}
+                onClick={() => go(vs ? `/play?${vs}` : '/play')}
                 data-testid="play-daily"
                 className="rounded-xl bg-orange-500 px-7 py-3.5 text-lg font-black text-black shadow-[0_0_32px_rgba(255,138,31,0.7)] transition hover:scale-[1.03] hover:bg-orange-400"
               >
@@ -173,7 +191,7 @@ export default function Lobby() {
               ))}
             </div>
             <button
-              onClick={() => go(`/play?mode=free&city=${encodeURIComponent(cityId)}&weather=${weather}`)}
+              onClick={() => go(`/play?mode=free&city=${encodeURIComponent(cityId)}&weather=${weather}${vs ? `&${vs}` : ''}`)}
               data-testid="play-free"
               className="mt-4 flex w-full items-center justify-between gap-3 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-500 px-6 py-3.5 text-black shadow-[0_0_28px_rgba(55,245,255,0.5)] transition hover:scale-[1.01] hover:brightness-110"
             >
@@ -184,7 +202,7 @@ export default function Lobby() {
         </div>
 
         {/* Leaderboard */}
-        <aside className={`${panel} flex h-fit max-h-full min-h-0 flex-col p-5`}>
+        <aside className={`${panel} flex h-fit flex-col p-5 lg:max-h-full lg:min-h-0`}>
           <p className="mb-2 text-xs uppercase tracking-[0.25em] text-white/50">Leaderboard</p>
           <div className="mb-3 flex flex-wrap gap-1.5 text-sm" role="tablist">
             {([
@@ -205,7 +223,7 @@ export default function Lobby() {
               </button>
             ))}
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="flex-1 lg:min-h-0 lg:overflow-hidden">
             <Leaderboard board={board === 'alltime' ? 'alltime' : board === 'daily' ? `daily:${daily.date}` : `free:${cityId}:${weather}`} limit={10} />
           </div>
         </aside>

@@ -410,3 +410,16 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 ## 2026-11-20 — Fixed start facing + respawn countdown
 **Agent did:** The car now faces up the street at the start and after every respawn, and only rotates while it is moving. A "BUSTED · back on the road in N" countdown shows while the game is paused after a catch (`respawn-countdown`). tsc is clean; 172 tests pass.
 **Needs human verification:** Get caught once and check that the countdown reads 2 → 1 and then you can drive again.
+
+## 2026-11-20 — Gadgets + race the #1 ghost; lobby overlap fix
+**Agent did:**
+- Engine v3 adds three gadgets, triggered with keys 1/2/3 (or Q/E/R) or the on-screen buttons. You start with 1 charge of each, and 3 crates on the map refill them.
+  - Nitro: double speed for 3 s.
+  - Oil: a slick that spins out the next cop to hit it for 4 s.
+  - Disguise: unseen for 5 s.
+- Gadget presses are recorded in the input log, so the server replay stays exact (tested).
+- New lobby option "🚗 Solo / 👻 Race #1 ghost", saved per browser. It fetches the board's best run that can still be replayed from the public route `/api/ghost` and replays it live as a translucent cyan car. The HUD shows ahead/behind, and the result screen shows who won.
+- The lobby no longer overlaps below 1024px.
+- tsc and eslint are clean; 180 tests pass. Checked in the browser locally.
+**Trade-off:** `ENGINE_VERSION` went from 2 to 3. Old scores stay on the boards, but old runs can't be ghosts. The ghost is the best v3 run in a board's top 50.
+**Needs human verification:** On a phone, check the gadget buttons are tappable and don't cover the minimap. Race a ghost to the end and check the result card.

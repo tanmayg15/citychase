@@ -15,7 +15,7 @@ import { MAX_TICKS, TICK_RATE, type CommanderPlan, type GameState, type InputLog
 import { callAction, claimGuestIfAny, guestStart, guestSubmit, loadGuest, saveGuest, type Guest } from '@/game/api'
 import { buildConfig } from '@/game/daily'
 import { preloadCity } from '@/game/AttractScene'
-import { GameCanvas, type Hud } from '@/game/GameCanvas'
+import { GameCanvas, type GhostRun, type Hud } from '@/game/GameCanvas'
 import { HudOverlay } from '@/game/HudOverlay'
 import { ResultScreen, type RunStats } from '@/game/ResultScreen'
 import { getSfx } from '@/game/sound'
@@ -46,9 +46,24 @@ interface Verified {
 
 type Phase =
   | { kind: 'starting' }
-  | { kind: 'playing'; run: Run }
-  | { kind: 'result'; run: Run; stats: RunStats; verified: Verified | null; error?: string }
+  | { kind: 'playing'; run: Run; ghost: GhostRun | null }
+  | { kind: 'result'; run: Run; stats: RunStats; verified: Verified | null; error?: string; ghost: GhostRun | null }
   | { kind: 'error'; message: string }
+
+interface GhostData { name: string; score: number; cityId: string; seed: number; weather: WeatherRecord; plan: CommanderPlan; inputLog: InputLog }
+
+/** The board's best replayable run, or null (no runs yet, or the request failed). */
+async function loadGhost(board: string): Promise<GhostRun | null> {
+  try {
+    const res = await fetch(`/api/ghost?board=${encodeURIComponent(board)}`)
+    const body = (await res.json()) as { success?: boolean; data?: GhostData | null }
+    const g = body.success ? body.data : null
+    if (!g) return null
+    return { name: g.name, score: g.score, log: g.inputLog, cfg: buildConfig({ cityId: g.cityId, seed: g.seed, weather: g.weather, plan: g.plan }) }
+  } catch {
+    return null
+  }
+}
 
 // Begin fetching the 3D engine + models as soon as this page's code loads.
 preloadCity()
@@ -61,6 +76,8 @@ export default function PlayPage() {
   const [view] = useView()
   const [showSignIn, setShowSignIn] = useState(false)
 
+  const wantGhost = params.get('ghost') === '1'
+  const [noGhost, setNoGhost] = useState(false)
   const runParams = useMemo(() => {
     const mode = params.get('mode') === 'free' ? 'free' : 'daily'
     return mode === 'free'
@@ -87,11 +104,13 @@ export default function PlayPage() {
         run = await guestStart<Run>({ ...runParams, guestId: g?.guestId, guestToken: g?.guestToken })
         if (run.guest) saveGuest(run.guest)
       }
-      setPhase({ kind: 'playing', run })
+      const ghost = wantGhost ? await loadGhost(run.board) : null
+      setNoGhost(wantGhost && !ghost)
+      setPhase({ kind: 'playing', run, ghost })
     } catch (e) {
       setPhase({ kind: 'error', message: (e as Error).message })
     }
-  }, [isSignedIn, runParams])
+  }, [isSignedIn, runParams, wantGhost])
 
   // Start once auth is known. If the visitor just signed in, move their guest scores first.
   const booted = useRef(false)
@@ -110,6 +129,7 @@ export default function PlayPage() {
   }, [isSignedIn, showSignIn])
 
   const run = phase.kind === 'playing' ? phase.run : undefined
+  const ghost = phase.kind === 'playing' ? phase.ghost : null
   const city = run ? getCity(run.cityId) : undefined
   const cfg = useMemo(
     () => (run ? buildConfig({ cityId: run.cityId, seed: run.seed, weather: run.weather, plan: run.plan }) : null),
@@ -122,16 +142,16 @@ export default function PlayPage() {
       outcome: final.status, score: final.score, lootTaken: final.lootTaken, lootTotal: final.loot.length,
       seconds: Math.round(final.tick / TICK_RATE), heatSeconds: Math.round(final.heat / TICK_RATE), livesLeft: final.lives,
     }
-    setPhase({ kind: 'result', run, stats, verified: null })
+    setPhase({ kind: 'result', run, stats, verified: null, ghost })
     try {
       const verified = run.ticket && run.guest
         ? await guestSubmit<Verified>({ ticket: run.ticket, inputLog: log, ...run.guest })
         : await callAction<Verified>('submitRun', { runId: run.runId, inputLog: log })
-      setPhase({ kind: 'result', run, stats, verified })
+      setPhase({ kind: 'result', run, stats, verified, ghost })
     } catch (e) {
-      setPhase({ kind: 'result', run, stats, verified: null, error: (e as Error).message })
+      setPhase({ kind: 'result', run, stats, verified: null, error: (e as Error).message, ghost })
     }
-  }, [run])
+  }, [run, ghost])
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#07030f] text-white">
@@ -150,12 +170,15 @@ export default function PlayPage() {
           onEnd={onEnd}
           onRestart={start}
           onQuit={() => { window.location.href = '/' }}
+          ghost={ghost}
         >
-          <HudOverlay hud={hud} city={city} weather={run.weather} mode={run.mode} />
+          <HudOverlay hud={hud} city={city} weather={run.weather} mode={run.mode} ghostName={ghost?.name} />
           {hud && hud.countdown > 0 && (
             <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/45">
               <p className="mb-3 max-w-md text-center text-base italic text-red-300">📻 “{run.plan.taunt}”</p>
               <RuleBadges weather={run.weather} />
+              {ghost && <p className="mt-3 rounded-full bg-cyan-400/20 px-4 py-1 text-sm text-cyan-100">👻 Racing {ghost.name}'s ghost · {ghost.score.toLocaleString('en-US')} pts</p>}
+              {noGhost && <p className="mt-3 rounded-full bg-white/10 px-4 py-1 text-sm text-white/70">👻 No ghost on this board yet: set the score to beat</p>}
               <p className="mt-3 text-8xl font-black" style={{ textShadow: '0 0 30px #ff8a1f' }}>{hud.countdown}</p>
             </div>
           )}
@@ -175,6 +198,7 @@ export default function PlayPage() {
             onAgain={start}
             onSignIn={isSignedIn ? undefined : () => setShowSignIn(true)}
             error={phase.error}
+            ghost={phase.ghost ? { name: phase.ghost.name, score: phase.ghost.score } : null}
           />
         </div>
       )}

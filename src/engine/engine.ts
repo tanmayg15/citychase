@@ -13,8 +13,8 @@
 import { canMove, isOpen, REVERSE, stepPoint } from './maze'
 import { rngInt, seedFromString } from './rng'
 import {
-  Cell, Dir,
-  type CopState, type GameConfig, type GameState, type InputLog, type Loot, type Maze, type Point,
+  Cell, Dir, Gadget, GADGET_KINDS,
+  type CopState, type GadgetKind, type Input, type GameConfig, type GameState, type InputLog, type Loot, type Maze, type Point,
 } from './types'
 
 export const TICK_RATE = 20
@@ -22,7 +22,7 @@ export const MAX_TICKS = 3 * 60 * TICK_RATE // runs are capped at 3 minutes
 export const MAX_INPUTS = 4000
 export const START_LIVES = 3
 /** Bump when rules change: stored with each run so old replays can be told apart. */
-export const ENGINE_VERSION = 2
+export const ENGINE_VERSION = 3
 
 export const PLAYER_PERIOD = 4 // ticks per tile (5 tiles/s)
 export const PATROL_PERIOD = 5
@@ -37,6 +37,14 @@ export const LOOT_COUNT = 10
 export const LOOT_TO_OPEN_EXIT = 7
 export const SMOKE_RADIUS = 7
 export const ESCAPE_BONUS = 1000
+/** Gadgets. */
+export const NITRO_TICKS = 60 // 3 s at double speed
+export const NITRO_PERIOD = 2
+export const OIL_TICKS = 400 // a slick lasts 20 s
+export const OIL_SPIN = 80 // a cop that hits it is out for 4 s
+export const MAX_OILS = 3
+export const DISGUISE_TICKS = 100 // 5 s unseen
+export const CRATE_COUNT = 3
 /** Every this many ticks of being seen costs 1 point. */
 export const HEAT_PER_POINT = 4
 
@@ -72,7 +80,7 @@ export function bfs(m: Maze, from: Point): number[] {
  * LOOT_COUNT junctions spread out by farthest-point sampling, worth more the
  * farther they are from the start. Same for every player on a given maze.
  */
-export function planHeist(m: Maze): { exit: Point; loot: Loot[] } {
+export function planHeist(m: Maze): { exit: Point; loot: Loot[]; crates: Point[] } {
   const fromStart = bfs(m, m.playerSpawn)
   const garage = m.ghostSpawns.map((g) => bfs(m, g))
   const junctions: number[] = []
@@ -101,8 +109,21 @@ export function planHeist(m: Maze): { exit: Point; loot: Loot[] } {
     const fromBest = bfs(m, at(best))
     for (const [k, d] of nearest) nearest.set(k, Math.min(d, fromBest[k]))
   }
+  // Gadget crates: the next-most-spread-out junctions after the loot.
+  const crates: number[] = []
+  while (crates.length < CRATE_COUNT) {
+    let best = -1, bestD = -1
+    for (const [k, d] of nearest) if (d > bestD) { best = k; bestD = d }
+    if (best < 0 || bestD < 2) break
+    crates.push(best)
+    nearest.delete(best)
+    const fromBest = bfs(m, at(best))
+    for (const [k, d] of nearest) nearest.set(k, Math.min(d, fromBest[k]))
+  }
   chosen.sort((a, b) => a - b)
+  crates.sort((a, b) => a - b)
   return {
+    crates: crates.map(at),
     exit: at(exitK),
     loot: chosen.map((k) => ({ ...at(k), value: 100 + 50 * Math.floor(fromStart[k] / 4), taken: false })),
   }
@@ -154,8 +175,41 @@ export function createGame(cfg: GameConfig): GameState {
     },
     cops,
     pauseUntil: 0,
+    gadgets: { nitro: 1, oil: 1, disguise: 1 },
+    crates: heist.crates.map((c, i) => ({ ...c, taken: false, kind: GADGET_KINDS[i % GADGET_KINDS.length] })),
+    oils: [],
+    nitroUntil: 0,
+    disguiseUntil: 0,
     events: [],
   }
+}
+
+export function playerPeriod(s: GameState): number {
+  return s.tick < s.nitroUntil ? NITRO_PERIOD : PLAYER_PERIOD
+}
+
+const GADGET_OF: Record<number, GadgetKind> = { [Gadget.Nitro]: 'nitro', [Gadget.Oil]: 'oil', [Gadget.Disguise]: 'disguise' }
+
+function activateGadget(s: GameState, g: Gadget): void {
+  const kind = GADGET_OF[g]
+  if (!kind || s.gadgets[kind] <= 0) return
+  const p = s.player
+  if (kind === 'oil' && (s.oils.length >= MAX_OILS || s.oils.some((o) => o.x === p.x && o.y === p.y))) return
+  s.gadgets[kind]--
+  if (kind === 'nitro') s.nitroUntil = s.tick + NITRO_TICKS
+  if (kind === 'oil') s.oils.push({ x: p.x, y: p.y, until: s.tick + OIL_TICKS })
+  if (kind === 'disguise') {
+    s.disguiseUntil = s.tick + DISGUISE_TICKS
+    for (const c of s.cops) {
+      if (c.status === 'chase') {
+        c.status = 'search'
+        c.tx = s.lastSeen?.x ?? p.x
+        c.ty = s.lastSeen?.y ?? p.y
+        c.until = s.tick + SEARCH_TICKS
+      }
+    }
+  }
+  s.events.push({ type: 'gadget', kind })
 }
 
 export function scoreOf(s: GameState): number {
@@ -277,9 +331,10 @@ export function copPeriod(c: CopState): number {
 function updateVision(cfg: GameConfig, s: GameState): void {
   const p = s.player
   let seen = false
+  const disguised = s.tick < s.disguiseUntil
   s.cops.forEach((c, i) => {
     if (c.status === 'garage' || c.status === 'blind') return
-    if (!canSee(cfg.maze, c.x, c.y, c.dir, p.x, p.y, cfg.modifiers.copVision)) {
+    if (disguised || !canSee(cfg.maze, c.x, c.y, c.dir, p.x, p.y, cfg.modifiers.copVision)) {
       if (c.status === 'chase') {
         // Lost sight: drive to where you were last seen and search there.
         c.status = 'search'
@@ -329,6 +384,8 @@ function moveCop(cfg: GameConfig, s: GameState, c: CopState): void {
   c.x = n.x
   c.y = n.y
 
+  hitOil(s, c)
+
   const wind = cfg.modifiers.wind
   if (wind && (c.status === 'patrol' || c.status === 'search')) {
     c.windClock++
@@ -338,9 +395,21 @@ function moveCop(cfg: GameConfig, s: GameState, c: CopState): void {
         const w = stepPoint(cfg.maze, c.x, c.y, wind.dir)
         c.x = w.x
         c.y = w.y
+        hitOil(s, c)
       }
     }
   }
+}
+
+/** A cop driving onto an oil slick spins out (blind) and the slick is used up. */
+function hitOil(s: GameState, c: CopState): void {
+  if (c.status === 'blind') return
+  const k = s.oils.findIndex((o) => o.x === c.x && o.y === c.y)
+  if (k < 0) return
+  s.oils.splice(k, 1)
+  c.status = 'blind'
+  c.until = s.tick + OIL_SPIN
+  s.events.push({ type: 'spinout', cop: s.cops.indexOf(c) })
 }
 
 // ─── Player ─────────────────────────────────────────────────────────────────
@@ -388,6 +457,13 @@ function movePlayer(cfg: GameConfig, s: GameState): void {
       s.events.push({ type: 'smoke', blinded })
     }
   }
+  for (const b of s.crates) {
+    if (!b.taken && b.x === p.x && b.y === p.y) {
+      b.taken = true
+      s.gadgets[b.kind]++
+      s.events.push({ type: 'crate', kind: b.kind })
+    }
+  }
   if (s.exit.open && p.x === s.exit.x && p.y === s.exit.y) s.status = 'escaped'
 }
 
@@ -409,6 +485,9 @@ function caught(cfg: GameConfig, s: GameState): boolean {
   p.slip = 0
   p.clock = 0
   s.lastSeen = null
+  s.nitroUntil = 0
+  s.disguiseUntil = 0
+  s.oils = []
   s.cops = spawnCops(cfg, s, s.tick + CAUGHT_PAUSE)
   s.pauseUntil = s.tick + CAUGHT_PAUSE
   return true
@@ -420,21 +499,24 @@ function caught(cfg: GameConfig, s: GameState): boolean {
  * Advance one tick. `input` is the direction pressed on this tick (Dir.None if
  * nothing new). Mutates and returns `s`.
  */
-export function step(cfg: GameConfig, s: GameState, input: Dir = Dir.None): GameState {
+export function step(cfg: GameConfig, s: GameState, input: Input = Dir.None): GameState {
   if (s.status !== 'playing') return s
   s.events = []
   const p = s.player
+  if (s.oils.length) s.oils = s.oils.filter((o) => o.until > s.tick)
 
-  if (input !== Dir.None) {
+  if (input >= Gadget.Nitro) {
+    if (s.tick >= s.pauseUntil) activateGadget(s, input as Gadget)
+  } else if (input !== Dir.None) {
     const isTurn = p.dir !== Dir.None && input !== p.dir && input !== REVERSE[p.dir]
-    p.wanted = input
+    p.wanted = input as Dir
     p.slip = isTurn ? cfg.modifiers.slipTiles : 0
   }
 
   if (s.tick >= s.pauseUntil) {
     let done = false
     p.clock++
-    if (p.clock >= PLAYER_PERIOD) {
+    if (p.clock >= playerPeriod(s)) {
       p.clock = 0
       movePlayer(cfg, s)
       done = s.status !== 'playing' || caught(cfg, s)
@@ -486,7 +568,7 @@ export function validateInputLog(log: unknown): LogCheck {
     const [t, d] = e
     if (!Number.isInteger(t) || t < 0 || t >= MAX_TICKS) return { ok: false, error: `bad tick ${t}` }
     if (t <= last) return { ok: false, error: 'ticks must be strictly increasing' }
-    if (!Number.isInteger(d) || d < Dir.Up || d > Dir.Left) return { ok: false, error: `bad dir ${d}` }
+    if (!Number.isInteger(d) || d < Dir.Up || d > Gadget.Disguise) return { ok: false, error: `bad input ${d}` }
     last = t
   }
   return { ok: true }
@@ -499,7 +581,7 @@ export function replay(cfg: GameConfig, log: InputLog): GameState {
   const s = createGame(cfg)
   let k = 0
   while (s.status === 'playing') {
-    let input = Dir.None
+    let input: Input = Dir.None
     if (k < log.length && log[k][0] === s.tick) input = log[k++][1]
     step(cfg, s, input)
   }

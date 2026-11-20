@@ -9,8 +9,8 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import {
-  CLEAR_WEATHER, Dir, LOOT_TO_OPEN_EXIT, TICK_RATE, createGame, step,
-  type GameConfig, type GameState, type InputLog, type WeatherSnapshot,
+  CLEAR_WEATHER, Dir, Gadget, LOOT_TO_OPEN_EXIT, TICK_RATE, createGame, step,
+  type GadgetKind, type GameConfig, type Input, type GameState, type InputLog, type WeatherSnapshot,
 } from '../engine'
 import { Motion, shouldHoldTurn } from './motion'
 import { getSfx, unlockOnNextGesture, type Sfx } from './sound'
@@ -40,6 +40,20 @@ function Kbd({ children }: { children: React.ReactNode }) {
   return <kbd className="rounded border border-white/25 bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-white/80">{children}</kbd>
 }
 
+const GADGET_KEYS: Record<string, Gadget> = {
+  '1': Gadget.Nitro, '2': Gadget.Oil, '3': Gadget.Disguise,
+  q: Gadget.Nitro, e: Gadget.Oil, r: Gadget.Disguise, Q: Gadget.Nitro, E: Gadget.Oil, R: Gadget.Disguise,
+}
+
+export const GADGETS: Array<{ kind: GadgetKind; input: Gadget; icon: string; label: string; key: string; color: string }> = [
+  { kind: 'nitro', input: Gadget.Nitro, icon: '🔥', label: 'Nitro', key: '1', color: '#ff6a1a' },
+  { kind: 'oil', input: Gadget.Oil, icon: '🛢️', label: 'Oil', key: '2', color: '#8a5cff' },
+  { kind: 'disguise', input: Gadget.Disguise, icon: '🎭', label: 'Disguise', key: '3', color: '#2fd8ff' },
+]
+
+/** A recorded run to race against: replayed tick by tick next to yours. */
+export interface GhostRun { cfg: GameConfig; log: InputLog; name: string; score: number }
+
 const KEYS: Record<string, Dir> = {
   ArrowUp: Dir.Up, ArrowRight: Dir.Right, ArrowDown: Dir.Down, ArrowLeft: Dir.Left,
   w: Dir.Up, d: Dir.Right, s: Dir.Down, a: Dir.Left,
@@ -63,6 +77,11 @@ export interface Hud {
   radio: string | null
   /** Seconds until you can drive again after being caught (0 = driving). */
   respawnIn: number
+  gadgets: Record<GadgetKind, number>
+  /** Gadgets currently running. */
+  active: { nitro: boolean; disguise: boolean }
+  /** Ghost race: the ghost's live score, or null without a ghost. */
+  ghostScore: number | null
 }
 
 /** WebGL available and the device is not obviously too weak for the 3D view. */
@@ -89,8 +108,10 @@ const OUTCOME: Record<string, string> = {
 
 export function GameCanvas({
   cfg, maxTicks, onHud, onEnd, view = '3d', weather = CLEAR_WEATHER,
-  waitForStart = false, showEndScreen = false, onRestart, onQuit, fill = false, children,
+  waitForStart = false, showEndScreen = false, onRestart, onQuit, fill = false, children, ghost,
 }: {
+  /** Optional ghost run to race against. */
+  ghost?: GhostRun | null
   cfg: GameConfig
   maxTicks: number
   onHud: (h: Hud) => void
@@ -123,6 +144,7 @@ export function GameCanvas({
   const [box, setBox] = useState({ w: 800, h: 520 })
   const boxRef = useRef(box)
   const lastHud = useRef<Hud | null>(null)
+  const gadgetRef = useRef<(g: Gadget) => void>(() => {})
   const cb = useRef({ onHud: (h: Hud) => { lastHud.current = h; onHud(h) }, onEnd })
   cb.current = { onHud: (h: Hud) => { lastHud.current = h; onHud(h) }, onEnd }
 
@@ -177,7 +199,12 @@ export function GameCanvas({
     const s = createGame(cfg)
     const log: InputLog = []
     let pending: Dir = Dir.None
+    let pendingGadget: Gadget | null = null
     const motion = new Motion(s)
+    // Ghost: its own game on the same streets, driven by its recorded inputs.
+    const gs = ghost ? createGame(ghost.cfg) : null
+    const ghostMotion = gs ? new Motion(gs) : null
+    let gk = 0
     let acc = 0
     let last = performance.now()
     let startAt = Number.POSITIVE_INFINITY // set when the player starts
@@ -213,6 +240,7 @@ export function GameCanvas({
       if (sound?.radio(id)) { radioText = text; radioUntil = now + 4000 }
     }
     const press = (d: Dir) => { pending = d }
+    gadgetRef.current = (g: Gadget) => { if (uiRef.current === 'running') pendingGadget = g }
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (uiRef.current === 'running' || uiRef.current === 'paused')) {
         e.preventDefault()
@@ -223,6 +251,12 @@ export function GameCanvas({
         e.preventDefault()
         sound?.resume()
         setUiBoth('running')
+        return
+      }
+      const g = GADGET_KEYS[e.key]
+      if (g) {
+        e.preventDefault()
+        gadgetRef.current(g)
         return
       }
       const d = KEYS[e.key]
@@ -265,7 +299,18 @@ export function GameCanvas({
           const prevDir = s.player.dir
           // A side turn pressed after the car has visibly passed the junction
           // centre waits until the car moves on (it then applies at the next road).
-          if (pending !== Dir.None && !shouldHoldTurn(cfg.maze, s, pending)) {
+          if (gs && ghostMotion && gs.status === 'playing') {
+            let gi: Input = Dir.None
+            if (gk < ghost!.log.length && ghost!.log[gk][0] === gs.tick) gi = ghost!.log[gk++][1]
+            step(ghost!.cfg, gs, gi)
+            ghostMotion.update(gs)
+          }
+          // A gadget goes in on its own tick; a pending turn waits one tick.
+          if (pendingGadget !== null) {
+            log.push([s.tick, pendingGadget])
+            step(cfg, s, pendingGadget)
+            pendingGadget = null
+          } else if (pending !== Dir.None && !shouldHoldTurn(cfg.maze, s, pending)) {
             log.push([s.tick, pending])
             step(cfg, s, pending)
             pending = Dir.None
@@ -282,6 +327,9 @@ export function GameCanvas({
               sound?.spotted()
               if (now - lastSpotted > 8000) { lastSpotted = now; say('spotted', RADIO_TEXT.spotted, now) }
             }
+            else if (e.type === 'gadget') sound?.smoke()
+            else if (e.type === 'crate') sound?.loot()
+            else if (e.type === 'spinout') sound?.screech(true)
             else if (e.type === 'caught') { sound?.caught(); say('caught', RADIO_TEXT.caught, now) }
             else if (e.type === 'end') {
               if (e.status === 'escaped') { sound?.escape(); say('escaped', RADIO_TEXT.escaped, now) } else sound?.busted()
@@ -298,13 +346,15 @@ export function GameCanvas({
       last = now
       const alpha = countdown > 0 ? 0 : Math.min(1, acc / TICK_MS)
       const pos = motion.sample(s, alpha, cfg.maze)
+      const gp = gs && ghostMotion ? ghostMotion.sample(gs, gs.status === 'playing' ? alpha : 1, ghost!.cfg.maze)[0] : null
+      const ghostPose = gs && gp ? { x: gp.x, y: gp.y, dir: gs.player.dir, done: gs.status !== 'playing' } : null
 
       if (scene) {
         const { w, h } = boxRef.current
         const key = `${w}x${h}`
         if (key !== sceneSize) { scene.setSize(w, h); sceneSize = key }
         try {
-          const at = scene.render(s, pos, now)
+          const at = scene.render(s, pos, now, ghostPose)
           // Night: keep the visible circle centred on the car, wherever the camera is.
           if (nightRef.current) {
             nightRef.current.style.background =
@@ -318,7 +368,7 @@ export function GameCanvas({
         }
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      drawFrame(ctx, cfg, s, pos, mapTileRef.current, now, dpr)
+      drawFrame(ctx, cfg, s, pos, mapTileRef.current, now, dpr, ghostPose)
 
       cb.current.onHud({
         score: s.score, lives: s.lives, status: s.status,
@@ -332,6 +382,9 @@ export function GameCanvas({
         heat: s.heat,
         radio: now < radioUntil ? radioText : null,
         respawnIn: s.status === 'playing' && s.pauseUntil > s.tick ? Math.ceil((s.pauseUntil - s.tick) / TICK_RATE) : 0,
+        gadgets: { ...s.gadgets },
+        active: { nitro: s.tick < s.nitroUntil, disguise: s.tick < s.disguiseUntil },
+        ghostScore: gs ? gs.score : null,
       })
       if (s.status !== 'playing' && !ended) {
         ended = true
@@ -354,7 +407,7 @@ export function GameCanvas({
       wrap.removeEventListener('touchmove', onTouchMove)
     }
     // A new cfg (or switching view) means a new game.
-  }, [cfg, maxTicks, mode, weather])
+  }, [cfg, maxTicks, mode, weather, ghost])
 
   const night = cfg.modifiers.visionRadius !== null
   const start = () => { sfx.current?.resume(); sfx.current?.setPaused(false); sfx.current?.click(); setUiBoth('running') }
@@ -381,6 +434,30 @@ export function GameCanvas({
           {muted ? '🔇' : '🔊'}
         </button>
       </div>
+      {ui === 'running' && snap && (
+        <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 gap-2" data-testid="gadget-bar">
+          {GADGETS.map((g) => {
+            const n = snap.gadgets[g.kind]
+            const on = (g.kind === 'nitro' && snap.active.nitro) || (g.kind === 'disguise' && snap.active.disguise)
+            return (
+              <button
+                key={g.kind}
+                onClick={() => gadgetRef.current(g.input)}
+                disabled={n === 0 && !on}
+                className="relative flex w-16 flex-col items-center rounded-xl border bg-black/60 px-2 py-1.5 text-white backdrop-blur transition disabled:opacity-35 sm:w-20"
+                style={{ borderColor: on ? g.color : 'rgba(255,255,255,0.2)', boxShadow: on ? `0 0 18px ${g.color}` : undefined }}
+                data-testid={`gadget-${g.kind}`}
+                aria-label={`${g.label} (${n} left)`}
+              >
+                <span className="text-xl leading-none">{g.icon}</span>
+                <span className="mt-0.5 text-[10px] uppercase tracking-wider text-white/70">{g.label}</span>
+                <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] font-bold text-black" style={{ background: g.color }}>{n}</span>
+                <span className="absolute left-1 top-0.5 hidden font-mono text-[9px] text-white/40 sm:block">{g.key}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
       {ui !== 'running' && !(ui === 'ended' && !showEndScreen) && (
         <div className={`absolute inset-0 z-20 flex items-center justify-center bg-black/55 text-white backdrop-blur-md ${fill ? '' : 'rounded-xl'}`} data-testid={`screen-${ui}`}>
           {ui === 'ready' && (
@@ -389,7 +466,7 @@ export function GameCanvas({
               <h2 className="mt-2 text-4xl font-black" style={{ textShadow: '0 0 24px rgba(255,138,31,0.6)' }}>Ready for the heist?</h2>
               <p className="mt-2 text-sm text-white/70">Grab the loot, reach the safehouse, stay out of the headlights.</p>
               <button onClick={start} className={`${primary} mt-6 w-full text-lg`} data-testid="start-button">▶ Start</button>
-              <p className="mt-4 text-xs text-white/45"><Kbd>←↑↓→</Kbd> / <Kbd>WASD</Kbd> / swipe to drive · <Kbd>Esc</Kbd> pauses</p>
+              <p className="mt-4 text-xs text-white/45"><Kbd>←↑↓→</Kbd> / <Kbd>WASD</Kbd> / swipe to drive · <Kbd>1</Kbd><Kbd>2</Kbd><Kbd>3</Kbd> gadgets · <Kbd>Esc</Kbd> pauses</p>
             </div>
           )}
           {ui === 'paused' && (
