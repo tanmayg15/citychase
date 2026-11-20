@@ -112,3 +112,37 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Phase 4: Live weather
+
+### Agent did
+- **Found and fixed a scaffold cost hole.** Any signed-in user could call any integration through `/api/integrations/*` on the owner's credits. Asked Tanmay mid-phase, then pushed and deployed only that fix (`08a180f`). Live check: 403.
+- `src/game/weather-source.ts`: mock fixtures per city (night from the city's local time), `mapOwm` (icon code → condition, day/night from icon or sunrise/sunset), `OWM_QUERY` per city.
+- `src/actions/guard.ts`: the single gate for every paid call. Checks mock vs live mode, the owner kill switch (default OFF) and per-user/global daily caps (weather 336/day, commander 150 + 10/user, email 30 + 3/user), and counts calls in the new `usage` collection.
+- `src/actions/weather.ts`: `resolveWeather` tries a fresh live cache (30 min, shared via the public `weatherCache` collection), then a real call if permitted, then stale live data, then mock. `getWeather` action (sign-in required). `startRun` now freezes the resolved weather on the run, so the server replay uses exactly what the player saw.
+- `src/actions/ops.ts` and `/ops` page: owner-only (`OWNER_USER_ID`, not just admin) status, kill switch toggle and today's usage against the caps.
+- HUD: weather line ("🌧️ Tokyo, light rain, 14°C, 21:40 local") and rule badges (Slippery streets / Wind pushes drones → / Night: short sight / Heat: longer power / demo weather) on `/home` and in the pre-run countdown.
+- Tests: 9 new (81 in total, all passing):
+  - mock mode never calls the integration;
+  - live mode with the switch OFF never calls it;
+  - live and ON makes one call, then the cache is shared across users for 30 min;
+  - a failing call falls back to stale data;
+  - a bad response shape falls back to mock;
+  - the global cap means no call;
+  - the commander per-user cap is 10;
+  - `mapOwm` cases;
+  - only the owner can read ops status or flip the switch.
+- Browser (local): `/home` and `/ops` (sign-in panel) load. Fixed a stale Vite cache that made app pages 404.
+
+### Not verified by the agent
+- **No real OpenWeatherMap call has been made yet.** Mock mode is the default and the kill switch defaults to OFF.
+- The signed-in HUD and the owner console have only been checked through unit tests, not in a browser while signed in.
+
+### Needs human verification (CP4)
+1. Approve deploying Phase 4 (still mock).
+2. Sign in, open `/ops`, and check: mode `mock`, switch OFF, usage all 0. Play a run and check the HUD shows demo weather and badges.
+3. To go live, approve setting `INTEGRATIONS_MODE = "live"` in `wrangler.toml` `[vars]` and redeploying. Then **you** flip the switch ON in `/ops`, play once, and check `/ops` shows `weather 1` and `npx deepspace app usage` shows the cost (about $0.002 per call).
+4. Flip the switch OFF and check the next run falls back (stale or demo weather) with no new usage.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
