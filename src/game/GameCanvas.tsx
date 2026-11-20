@@ -13,7 +13,7 @@ import {
   type GameConfig, type GameState, type InputLog, type WeatherSnapshot,
 } from '../engine'
 import { Motion } from './motion'
-import { Sfx } from './sound'
+import { getSfx, unlockOnNextGesture, type Sfx } from './sound'
 import { drawFrame } from './renderer'
 import type { CityScene } from './three/CityScene'
 
@@ -90,7 +90,7 @@ export function GameCanvas({
   const setUiBoth = (u: Ui) => { uiRef.current = u; setUi(u) }
   const [final, setFinal] = useState<{ status: string; score: number; loot: number } | null>(null)
   const sfx = useRef<Sfx | null>(null)
-  if (!sfx.current && typeof window !== 'undefined') sfx.current = new Sfx()
+  if (!sfx.current) sfx.current = getSfx()
   const [muted, setMuted] = useState(() => sfx.current?.isMuted() ?? false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<HTMLCanvasElement>(null)
@@ -103,7 +103,12 @@ export function GameCanvas({
   cb.current = { onHud, onEnd }
 
   useEffect(() => setMode(view), [view])
-  useEffect(() => () => sfx.current?.dispose(), [])
+  // Audio is shared across games: unlock it on any gesture, silence it on unmount.
+  useEffect(() => {
+    if (uiRef.current === 'running') sfx.current?.resume() // allowed after a recent click (e.g. Start run)
+    const off = unlockOnNextGesture()
+    return () => { off(); sfx.current?.quiet() }
+  }, [])
 
   // 2D tile size (2D view) or minimap size (3D view).
   const tile2d = Math.max(8, Math.min(32, Math.floor(Math.min(box.w / cfg.maze.width, box.h / cfg.maze.height))))

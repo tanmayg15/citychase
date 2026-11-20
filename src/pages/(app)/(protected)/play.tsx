@@ -11,6 +11,7 @@ import { buildConfig, shareString, weatherEmoji, weatherLabel } from '@/game/dai
 import { GameCanvas, type Hud } from '@/game/GameCanvas'
 import { HudBar } from '@/game/HudBar'
 import { useView } from '@/game/useView'
+import { getSfx } from '@/game/sound'
 import { Leaderboard, topPercent, useDailyBoard } from '@/game/Leaderboard'
 import { RuleBadges } from '@/game/WeatherInfo'
 import type { WeatherRecord } from '@/game/weather-source'
@@ -46,6 +47,9 @@ export default function PlayPage() {
   const [view, setView] = useView()
 
   const start = useCallback(async () => {
+    // Unlock audio inside the click itself: the game only appears after the
+    // startRun request returns, which browsers no longer count as a gesture.
+    getSfx()?.resume()
     setPhase({ kind: 'starting' })
     try {
       const run = await callAction<StartedRun>('startRun')

@@ -148,9 +148,40 @@ export class Sfx {
   busted(): void { [392, 330, 262].forEach((f, i) => this.tone(f, i * 0.18, 0.35, 'sawtooth', 0.12)) }
   click(): void { this.tone(660, 0, 0.05, 'square', 0.08) }
 
+  /** Silence the continuous sounds (engine, siren) without closing audio. */
+  quiet(): void {
+    this.update(false, false, 0)
+    if (this.engineGain && this.ctx) this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05)
+  }
+
   dispose(): void {
     try { this.engineOsc?.stop(); this.sirenOsc?.stop() } catch { /* already stopped */ }
     void this.ctx?.close()
     this.ctx = null
+  }
+}
+
+let shared: Sfx | null = null
+
+/**
+ * One audio engine for the whole page. It must be unlocked (resume()) inside a
+ * user gesture, and the gesture that starts a run (the "Start run" click)
+ * happens before the game component exists, so the audio cannot live inside it.
+ */
+export function getSfx(): Sfx | null {
+  if (typeof window === 'undefined') return null
+  if (!shared) shared = new Sfx()
+  return shared
+}
+
+/** Unlock audio on the next click/tap/key anywhere on the page (safety net for strict browsers). */
+export function unlockOnNextGesture(): () => void {
+  const fn = () => getSfx()?.resume()
+  const opts = { capture: true } as const
+  window.addEventListener('pointerdown', fn, opts)
+  window.addEventListener('keydown', fn, opts)
+  return () => {
+    window.removeEventListener('pointerdown', fn, opts)
+    window.removeEventListener('keydown', fn, opts)
   }
 }
