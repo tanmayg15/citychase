@@ -36,12 +36,23 @@ import {
 } from 'deepspace/worker'
 import type { ActionResult, ActionTools, VerifyResult } from 'deepspace/worker'
 import { actions } from '../actions/index.js'
+import { guestStart } from '../actions/runs.js'
 import { integrations } from '../integrations.js'
 import type { AppContext, Env } from '../../worker.js'
 
 type ResolveAuth = (req: Request, env: Env) => Promise<VerifyResult | null>
 
 export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: ResolveAuth): void {
+  // Guest play: no sign-in. Returns a signed run ticket; never spends credits
+  // (setupRun with a null user only reads cached weather). The tools act as a
+  // fixed 'guest' identity and the handler only performs reads.
+  app.post('/api/guest/start', async (c) => {
+    const params = await c.req.json<Record<string, unknown>>().catch(() => ({}))
+    const tools = createActionTools(c.env, 'guest', '')
+    const result = await guestStart(c.env, tools, params as Record<string, unknown>)
+    return c.json(result as unknown as Record<string, unknown>, result.success ? 200 : 400)
+  })
+
   app.post('/api/actions/:name', async (c) => {
     const auth = await resolveAuth(c.req.raw, c.env)
     if (!auth) return c.json({ error: 'Unauthorized' }, 401)

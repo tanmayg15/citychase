@@ -66,7 +66,7 @@ describe('submitRun', () => {
     const expected = replay(buildConfig({ cityId: s.cityId, seed: s.seed, weather: stored.weather, plan: stored.plan }), log())
     expect(row.score).toBe(expected.score)
     expect(row.status).toBe('verified')
-    expect(db.get('leaderboard')!.get(`${row.date}:alice`)).toMatchObject({ score: expected.score, runId: s.runId })
+    expect(db.get("leaderboard")!.get(`daily:${row.date}:alice`)).toMatchObject({ score: expected.score, runId: s.runId })
   })
 
   it('rejects a replayed request (same run submitted twice)', async () => {

@@ -24,12 +24,19 @@ function bbox({ lat, lon }) {
 const wanted = process.argv.slice(2)
 for (const c of CITIES.filter((c) => !wanted.length || wanted.includes(c.id))) {
   const query = `[out:json][timeout:60];way["highway"~"^(${HIGHWAYS})$"](${bbox(c)});out geom;`
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'citychase-maze-builder/0.1' },
-    body: 'data=' + encodeURIComponent(query),
-  })
-  if (!res.ok) throw new Error(`${c.id}: HTTP ${res.status} ${await res.text()}`)
+  // The shared Overpass server rate-limits; back off exponentially (as it asks).
+  let res
+  for (let attempt = 0, wait = 5000; ; attempt++, wait *= 2) {
+    res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'citychase-maze-builder/0.1' },
+      body: 'data=' + encodeURIComponent(query),
+    })
+    if (res.ok) break
+    if (attempt >= 5 || (res.status !== 429 && res.status !== 504)) throw new Error(`${c.id}: HTTP ${res.status} ${await res.text()}`)
+    console.log(`${c.id}: HTTP ${res.status}, retrying in ${wait / 1000}s`)
+    await new Promise((r) => setTimeout(r, wait))
+  }
   const json = await res.json()
   const ways = json.elements
     .filter((e) => e.type === 'way' && e.geometry)

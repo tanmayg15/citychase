@@ -17,7 +17,8 @@ export const runsSchema: CollectionSchema = {
   columns: [
     { name: 'userId', storage: 'text', interpretation: 'plain', required: true, immutable: true },
     { name: 'date', storage: 'text', interpretation: 'plain', required: true, immutable: true },
-    { name: 'mode', storage: 'text', interpretation: { kind: 'select', options: ['daily', 'endless'] }, required: true },
+    { name: 'mode', storage: 'text', interpretation: { kind: 'select', options: ['daily', 'free', 'endless'] }, required: true },
+    { name: 'board', storage: 'text', interpretation: 'plain' },
     { name: 'cityId', storage: 'text', interpretation: 'plain', required: true, immutable: true },
     { name: 'seed', storage: 'number', interpretation: 'plain', required: true, immutable: true },
     { name: 'engineVersion', storage: 'number', interpretation: 'plain', required: true },
@@ -41,10 +42,14 @@ export const runsSchema: CollectionSchema = {
   },
 }
 
-/** Best verified score per user per day. Upserted by `submitRun` with id `${date}:${userId}`. */
+/**
+ * Best verified score per user per board. Upserted by the run actions with id
+ * `${board}:${userId}`. Boards: `daily:<date>` and `free:<cityId>:<weather>`.
+ */
 export const leaderboardSchema: CollectionSchema = {
   name: 'leaderboard',
   columns: [
+    { name: 'board', storage: 'text', interpretation: 'plain' },
     { name: 'date', storage: 'text', interpretation: 'plain', required: true },
     { name: 'cityId', storage: 'text', interpretation: 'plain', required: true },
     { name: 'userId', storage: 'text', interpretation: 'plain', required: true },
@@ -52,7 +57,7 @@ export const leaderboardSchema: CollectionSchema = {
     { name: 'score', storage: 'number', interpretation: 'plain', required: true },
     { name: 'runId', storage: 'text', interpretation: 'plain', required: true },
   ],
-  uniqueOn: ['date', 'userId'],
+  uniqueOn: ['board', 'userId'],
   permissions: {
     '*': { read: true, ...SERVER_ONLY },
     viewer: { read: true, ...SERVER_ONLY },

@@ -215,3 +215,20 @@ Playwright: solo run flow + 2-account ghost race (`npx deepspace test accounts c
 - Cost design (mock mode, caps, kill switch, no paid cron)
 - What the agent did / what I verified / what I changed
 - Unfinished + next
+
+
+---
+
+## 12. Phase 2 roadmap (agreed with Tanmay, 2026-11-20)
+
+Phase 1 (engine, 7 city mazes, heist rules, 3D renderer, sound, verified scores, live weather, cost safety) is done and deployed. Tanmay's direction for the remaining days:
+
+1. **Play without signing in.** Anyone can play. After a run: "Sign in to save to the leaderboard". Guest runs get a server-signed **run ticket** (HMAC, secret `RUN_TICKET_SECRET`). After sign-in the client submits `{ticket, inputLog}` (`claimRun`), and the server verifies the signature, freshness, single use and real time, then replays as before. Guests never trigger paid calls (cached or demo weather only). Sign-in is Google/GitHub (DeepSpace has no public email sign-up), worded "Continue with Google".
+2. **One home page = the game lobby**, with a live 3D city (bot-driven attract mode) behind the menu. `/` and `/home` merge.
+3. **Free Play:** pick any city (about 20 via the OSM pipeline) and any weather (Live, Clear, Rain, Snow, Wind, Heat, Night, Fog). Leaderboard per board (`daily:<date>`, `free:<city>:<weather>`).
+4. **RL cop driving policy:** a Python port of the engine with **parity tests** against the TS engine (identical state hashes). PPO with a shared policy for 4 cops, trained against scripted getaway bots across all cities and weathers. Small MLP, **int8-quantized, integer-only inference in TS**, so server replay verification still holds. Evaluated against the rule-based cops (escape rate, time to catch).
+5. **Cop radio chatter with audio:** event-driven lines using real OSM **street names** ("Unit 2, visual on suspect, northbound on Broadway"), including the policy's predicted turn ("he's turning right at 5th; Unit 3, block the north exit"). Browser speech synthesis (free), a different voice per unit, squelch and static, ducking. Text in a radio panel and speech bubbles over the cars.
+6. **Living 3D world** (inspired by mantarjantar.in): pedestrians, trees and parks, varied rooftops, floating street names, an objective arrow with distance, a news ticker.
+7. 2D is an automatic fallback only (no prominent switch).
+
+**Moved to "documented as next":** Ghost Races, Endless, Live Chase multiplayer, the Claude commander (radio chatter + RL policy replace its role), challenge emails.

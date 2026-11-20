@@ -53,3 +53,18 @@ export const getWeather: ActionHandler<Env> = async ({ userId, params, tools, en
   if (typeof cityId !== 'string' || !getCity(cityId)) return { success: false, error: 'unknown city' }
   return { success: true, data: await resolveWeather(env, tools, cityId, userId) }
 }
+
+/**
+ * Guests never trigger a paid call: they get the shared cached live weather
+ * (marked stale if older than the TTL) or the demo fixture.
+ */
+export async function cachedWeather(tools: ActionTools, cityId: string, nowMs = Date.now()): Promise<WeatherRecord> {
+  const city = getCity(cityId)
+  if (!city) throw new Error(`unknown city ${cityId}`)
+  const cached = await tools.get('weatherCache', cityId)
+  const row = cached.success ? (cached.data.record.data as unknown as CacheRow) : null
+  if (row && row.source === 'live') {
+    return nowMs - row.fetchedAtMs < WEATHER_TTL_MS ? row.weather : { ...row.weather, source: 'stale' }
+  }
+  return mockWeather(cityId, city.timezone, nowMs)
+}

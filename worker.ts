@@ -110,6 +110,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   OWNER_USER_ID: string
   /** 'live' allows real paid integration calls (plus the owner kill switch). Anything else = mock. */
   INTEGRATIONS_MODE?: string
+  /** HMAC key for guest run tickets (secret). */
+  RUN_TICKET_SECRET?: string
   /**
    * Long-lived owner JWT used for developer-billed server calls. User-billed
    * calls always forward the signed-in caller's JWT instead.

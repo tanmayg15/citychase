@@ -129,6 +129,8 @@ export class CityScene {
   private lastMs = 0
   private disposables: Array<{ dispose(): void }> = []
   private readonly night: boolean
+  /** Lobby background: slow orbiting camera instead of the chase cam. */
+  cinematic = false
 
   constructor(canvas: HTMLCanvasElement, private cfg: GameConfig, weather: WeatherSnapshot) {
     this.night = weather.isNight
@@ -670,6 +672,16 @@ export class CityScene {
     // Chase camera: follows the car from behind-and-above, north stays up so
     // the arrow keys keep matching the screen.
     const { width: MW, height: MH } = this.cfg.maze
+    if (this.cinematic) {
+      const a = timeMs / 22000
+      const cx = MW / 2, cz = MH / 2
+      this.camTarget.set(cx + Math.cos(a * 0.7) * 3, 0, cz + Math.sin(a * 0.7) * 2)
+      this.camera.position.set(cx + Math.cos(a) * 17, 11 + Math.sin(a * 0.5) * 2, cz + Math.sin(a) * 15)
+      this.camera.lookAt(this.camTarget)
+      this.grade.uniforms.time.value = timeMs / 1000
+      this.composer.render()
+      return { x: 0.5, y: 0.5 }
+    }
     // Keep the car near the middle of the screen; clamp only a little at the
     // map edges (a hard clamp pushed the car to the screen edge, where it was
     // seen at a shallow angle behind buildings).

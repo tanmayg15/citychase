@@ -1,38 +1,48 @@
 /**
- * Run lifecycle server actions.
+ * Run lifecycle.
  *
- *   startRun  → server picks today's city, mints a per-attempt salt, stores a
- *               'started' run, returns everything the client needs to play.
- *   submitRun → client sends ONLY {runId, inputLog}. The server replays the
- *               run with the shared engine, using the seed/weather/plan it stored
- *               itself, and writes the score. Client-reported scores do not exist.
- *
- * Anti-cheat checks: owner match, single submission per run, engine version,
- * input-log validation, wall-clock time ≥ game time, per-user daily run cap.
+ * Signed-in players:
+ *   startRun  → server picks the city/seed/weather/plan, stores a 'started' run.
+ *   submitRun → client sends ONLY {runId, inputLog}; the server replays the run
+ *               with the engine and writes the score.
+ * Guests (no sign-in needed to play):
+ *   POST /api/guest/start → the same setup, returned as a server-SIGNED ticket
+ *               (nothing stored, no paid calls).
+ *   claimRun  → after signing in, {ticket, inputLog}; the server checks the
+ *               signature, age, single use and real time, then replays it the same way.
+ * Client-reported scores do not exist anywhere.
  */
-import type { ActionHandler, ActionTools } from 'deepspace/worker'
+import type { ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
+import { getCity } from '../cities'
 import {
-  DEFAULT_PLAN, ENGINE_VERSION, TICK_RATE, replay, validateInputLog,
-  type CommanderPlan, type InputLog, type WeatherSnapshot,
+  DEFAULT_PLAN, ENGINE_VERSION, TICK_RATE, replay, seedFromString, validateInputLog,
+  type CommanderPlan, type InputLog,
 } from '../engine'
 import { buildConfig, dailyFor, runSeed, utcDate } from '../game/daily'
-import { resolveWeather } from './weather'
+import { isPreset, presetWeather, type WeatherPreset, type WeatherRecord } from '../game/weather-source'
+import { newTicketId, signTicket, verifyTicket, type RunTicket } from '../server/tickets'
+import { cachedWeather, resolveWeather } from './weather'
 
 export const MAX_RUNS_PER_DAY = 40
 /** Submitting must take at least this share of the game's real duration. */
 const MIN_REALTIME_RATIO = 0.9
 const MAX_RUN_AGE_MS = 15 * 60 * 1000
+/** Guests may take a while to sign in after the run. */
+export const MAX_TICKET_AGE_MS = 60 * 60 * 1000
 const MAX_LOG_BYTES = 64 * 1024
+
+export type RunMode = 'daily' | 'free'
 
 interface RunRow {
   userId: string
   date: string
-  mode: 'daily' | 'endless'
+  mode: RunMode
+  board: string
   cityId: string
   seed: number
   engineVersion: number
-  weather: WeatherSnapshot
+  weather: WeatherRecord
   plan: CommanderPlan
   startedAtMs: number
   status: 'started' | 'verified' | 'rejected'
@@ -40,6 +50,16 @@ interface RunRow {
 }
 
 interface LeaderRow { score: number }
+
+export interface RunSetup {
+  mode: RunMode
+  board: string
+  date: string
+  cityId: string
+  seed: number
+  weather: WeatherRecord
+  plan: CommanderPlan
+}
 
 function fail(error: string) {
   return { success: false as const, error }
@@ -56,48 +76,53 @@ async function displayName(tools: ActionTools, userId: string): Promise<string> 
   return (data.name ?? 'Player').slice(0, 40)
 }
 
-export const startRun: ActionHandler<Env> = async ({ userId, tools, env }) => {
-  const daily = dailyFor(utcDate())
-  const today = await tools.query('runs', { where: { userId, date: daily.date } })
-  if (!today.success) return today
-  if (today.data.count >= MAX_RUNS_PER_DAY) {
-    return fail(`Daily limit reached (${MAX_RUNS_PER_DAY} runs). Come back tomorrow.`)
-  }
+/** Leaderboard id for a mode / city / weather choice. */
+export function boardFor(mode: RunMode, date: string, cityId: string, preset: WeatherPreset): string {
+  return mode === 'daily' ? `daily:${date}` : `free:${cityId}:${preset}`
+}
 
-  // Weather is resolved and frozen on the run, so the replay uses exactly what the player saw.
-  const weather = await resolveWeather(env, tools, daily.cityId, userId)
-  // Phase 5 replaces this with the commander plan.
-  const plan = DEFAULT_PLAN
-  const seed = runSeed(daily.dailySeed, randomSalt())
-  const row: RunRow = {
-    userId, date: daily.date, mode: 'daily', cityId: daily.cityId, seed,
-    engineVersion: ENGINE_VERSION, weather, plan, startedAtMs: Date.now(), status: 'started',
+/**
+ * Pick everything a run needs. `userId` null = guest: never triggers a paid call.
+ * Throws on bad params (callers turn that into an error result).
+ */
+export async function setupRun(
+  env: Pick<Env, 'INTEGRATIONS_MODE'>, tools: ActionTools, userId: string | null, params: Record<string, unknown>,
+): Promise<RunSetup> {
+  const date = utcDate()
+  const mode: RunMode = params.mode === 'free' ? 'free' : 'daily'
+  let cityId: string
+  let preset: WeatherPreset = 'live'
+  let baseSeed: number
+  if (mode === 'daily') {
+    const d = dailyFor(date)
+    cityId = d.cityId
+    baseSeed = d.dailySeed
+  } else {
+    if (typeof params.cityId !== 'string' || !getCity(params.cityId)) throw new Error('unknown city')
+    cityId = params.cityId
+    preset = isPreset(params.weather) ? params.weather : 'live'
+    baseSeed = seedFromString(`free:${cityId}`)
   }
-  const created = await tools.create('runs', row as unknown as Record<string, unknown>)
-  if (!created.success) return created
+  const weather = preset !== 'live'
+    ? presetWeather(cityId, preset, Date.now())
+    : userId ? await resolveWeather(env, tools, cityId, userId) : await cachedWeather(tools, cityId)
   return {
-    success: true,
-    data: { runId: created.data.recordId, date: daily.date, cityId: daily.cityId, seed, weather, plan },
+    mode, date, cityId, weather,
+    board: boardFor(mode, date, cityId, preset),
+    seed: runSeed(baseSeed, randomSalt()),
+    plan: DEFAULT_PLAN,
   }
 }
 
-export const submitRun: ActionHandler<Env> = async ({ userId, params, tools }) => {
-  const runId = params.runId
-  const inputLog = params.inputLog
-  if (typeof runId !== 'string' || runId.length > 100) return fail('runId required')
-
-  const got = await tools.get('runs', runId)
-  if (!got.success) return fail('Run not found')
-  const run = (got.data.record.data as unknown as RunRow)
-  // RBAC is off inside actions, so ownership is checked here explicitly.
-  if (run.userId !== userId) return fail('Run not found')
-  if (run.status !== 'started') return fail('Run already submitted')
-
+/** Replay, run the real-time check, store the verified run, and update the board. */
+async function verifyAndRecord(
+  tools: ActionTools, userId: string, runId: string, run: Omit<RunRow, 'status' | 'userId'>,
+  inputLog: unknown, existing: boolean,
+): Promise<ActionResult<Record<string, unknown>>> {
   const reject = async (reason: string) => {
-    await tools.update('runs', runId, { status: 'rejected', rejectReason: reason })
+    if (existing) await tools.update('runs', runId, { status: 'rejected', rejectReason: reason })
     return fail(`Run rejected: ${reason}`)
   }
-
   if (run.engineVersion !== ENGINE_VERSION) return reject('engine version changed')
   if (JSON.stringify(inputLog ?? null).length > MAX_LOG_BYTES) return reject('input log too large')
   const check = validateInputLog(inputLog)
@@ -110,32 +135,95 @@ export const submitRun: ActionHandler<Env> = async ({ userId, params, tools }) =
 
   const elapsedMs = Date.now() - run.startedAtMs
   const gameMs = (end.tick * 1000) / TICK_RATE
-  if (elapsedMs > MAX_RUN_AGE_MS) return reject('run expired')
   if (elapsedMs < gameMs * MIN_REALTIME_RATIO) return reject('finished faster than real time')
 
-  console.info(`[submitRun] run=${runId} ticks=${end.tick} score=${end.score} replayMs=${replayMs.toFixed(2)}`)
+  console.info(`[run] ${runId} board=${run.board} ticks=${end.tick} score=${end.score} replayMs=${replayMs.toFixed(2)}`)
 
-  const upd = await tools.update('runs', runId, {
-    status: 'verified', inputLog, score: end.score, durationTicks: end.tick, outcome: end.status,
-  })
-  if (!upd.success) return upd
+  const result = { status: 'verified', inputLog, score: end.score, durationTicks: end.tick, outcome: end.status }
+  const saved = existing
+    ? await tools.update('runs', runId, result)
+    : await tools.create('runs', { ...run, userId, ...result } as unknown as Record<string, unknown>, runId)
+  if (!saved.success) return saved
 
-  // Keep the best score per user per day.
-  const lbId = `${run.date}:${userId}`
+  // Best score per user per board.
+  const lbId = `${run.board}:${userId}`
   const prev = await tools.get('leaderboard', lbId)
   const prevScore = prev.success ? (prev.data.record.data as unknown as LeaderRow).score : -1
-  let best = prevScore
   if (end.score > prevScore) {
-    best = end.score
     const lb = await tools.create('leaderboard', {
-      date: run.date, cityId: run.cityId, userId, name: await displayName(tools, userId),
-      score: end.score, runId,
+      board: run.board, date: run.date, cityId: run.cityId, userId,
+      name: await displayName(tools, userId), score: end.score, runId,
     }, lbId)
     if (!lb.success) return lb
   }
-
   return {
     success: true,
-    data: { runId, score: end.score, outcome: end.status, durationTicks: end.tick, best, newBest: end.score > prevScore, replayMs },
+    data: {
+      runId, board: run.board, score: end.score, outcome: end.status, durationTicks: end.tick,
+      best: Math.max(end.score, prevScore), newBest: end.score > prevScore, replayMs,
+    },
   }
+}
+
+export const startRun: ActionHandler<Env> = async ({ userId, params, tools, env }) => {
+  const date = utcDate()
+  const today = await tools.query('runs', { where: { userId, date } })
+  if (!today.success) return today
+  if (today.data.count >= MAX_RUNS_PER_DAY) {
+    return fail(`Daily limit reached (${MAX_RUNS_PER_DAY} runs). Come back tomorrow.`)
+  }
+  let setup: RunSetup
+  try {
+    setup = await setupRun(env, tools, userId, params)
+  } catch (e) {
+    return fail((e as Error).message)
+  }
+  const row: RunRow = { ...setup, userId, engineVersion: ENGINE_VERSION, startedAtMs: Date.now(), status: 'started' }
+  const created = await tools.create('runs', row as unknown as Record<string, unknown>)
+  if (!created.success) return created
+  return { success: true, data: { runId: created.data.recordId, ...setup } }
+}
+
+export const submitRun: ActionHandler<Env> = async ({ userId, params, tools }) => {
+  const runId = params.runId
+  if (typeof runId !== 'string' || runId.length > 100) return fail('runId required')
+  const got = await tools.get('runs', runId)
+  if (!got.success) return fail('Run not found')
+  const run = got.data.record.data as unknown as RunRow
+  // RBAC is off inside actions, so ownership is checked here explicitly.
+  if (run.userId !== userId) return fail('Run not found')
+  if (run.status !== 'started') return fail('Run already submitted')
+  if (Date.now() - run.startedAtMs > MAX_RUN_AGE_MS) {
+    await tools.update('runs', runId, { status: 'rejected', rejectReason: 'run expired' })
+    return fail('Run rejected: run expired')
+  }
+  return verifyAndRecord(tools, userId, runId, { ...run, board: run.board ?? `daily:${run.date}` }, params.inputLog, true)
+}
+
+/** Guest start: the same setup as startRun, returned as a signed ticket. No auth, no storage, no paid calls. */
+export async function guestStart(
+  env: Pick<Env, 'INTEGRATIONS_MODE' | 'RUN_TICKET_SECRET'>, tools: ActionTools, params: Record<string, unknown>,
+) {
+  if (!env.RUN_TICKET_SECRET) return fail('Guest play is not configured')
+  let setup: RunSetup
+  try {
+    setup = await setupRun(env, tools, null, params)
+  } catch (e) {
+    return fail((e as Error).message)
+  }
+  const ticket: RunTicket = { v: 1, id: newTicketId(), ...setup, engineVersion: ENGINE_VERSION, startedAtMs: Date.now() }
+  return { success: true as const, data: { ticket: await signTicket(env.RUN_TICKET_SECRET, ticket), ...setup } }
+}
+
+/** Signed-in: turn a guest ticket + input log into a verified run, exactly once. */
+export const claimRun: ActionHandler<Env> = async ({ userId, params, tools, env }) => {
+  if (!env.RUN_TICKET_SECRET) return fail('Guest play is not configured')
+  const t = await verifyTicket(env.RUN_TICKET_SECRET, params.ticket)
+  if (!t) return fail('Invalid ticket')
+  if (Date.now() - t.startedAtMs > MAX_TICKET_AGE_MS) return fail('Ticket expired: play again to save a score')
+  const runId = `t_${t.id}`
+  const existing = await tools.get('runs', runId)
+  if (existing.success) return fail('Run already submitted')
+  const { v: _v, id: _id, ...run } = t
+  return verifyAndRecord(tools, userId, runId, run, params.inputLog, false)
 }

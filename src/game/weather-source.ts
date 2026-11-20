@@ -5,7 +5,7 @@
  */
 import type { WeatherSnapshot } from '../engine'
 
-export type WeatherSource = 'live' | 'mock' | 'stale'
+export type WeatherSource = 'live' | 'mock' | 'stale' | 'preset'
 
 /** A snapshot plus where it came from. Stored in weatherCache and on each run. */
 export interface WeatherRecord extends WeatherSnapshot {
@@ -96,4 +96,25 @@ export function mapOwm(cityId: string, r: OwmCurrent, nowMs: number): WeatherRec
 /** Only these fields reach the engine; the rest is display metadata. */
 export function toSnapshot(w: WeatherSnapshot): WeatherSnapshot {
   return { condition: w.condition, tempC: w.tempC, windSpeed: w.windSpeed, windDeg: w.windDeg, isNight: w.isNight }
+}
+
+/** Weather a player can pick in Free Play. 'live' = the city's real current weather. */
+export const WEATHER_PRESETS = ['live', 'clear', 'rain', 'snow', 'wind', 'heat', 'night', 'fog'] as const
+export type WeatherPreset = (typeof WEATHER_PRESETS)[number]
+
+export function isPreset(x: unknown): x is WeatherPreset {
+  return typeof x === 'string' && (WEATHER_PRESETS as readonly string[]).includes(x)
+}
+
+export function presetWeather(cityId: string, preset: Exclude<WeatherPreset, 'live'>, nowMs: number): WeatherRecord {
+  const base = { cityId, source: 'preset' as WeatherSource, fetchedAtMs: nowMs, isNight: false, windSpeed: 2, windDeg: 0, tempC: 18 }
+  switch (preset) {
+    case 'clear': return { ...base, condition: 'clear', description: 'clear sky' }
+    case 'rain': return { ...base, condition: 'rain', tempC: 12, description: 'heavy rain' }
+    case 'snow': return { ...base, condition: 'snow', tempC: -2, description: 'snow' }
+    case 'wind': return { ...base, condition: 'clear', windSpeed: 15, windDeg: 270, description: 'gale-force wind' }
+    case 'heat': return { ...base, condition: 'clear', tempC: 36, description: 'heatwave' }
+    case 'night': return { ...base, condition: 'clear', isNight: true, tempC: 14, description: 'clear night' }
+    case 'fog': return { ...base, condition: 'mist', tempC: 10, description: 'thick fog' }
+  }
 }
