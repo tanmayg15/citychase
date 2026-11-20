@@ -9,9 +9,10 @@ import * as THREE from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { beamTiles, Cell, Dir, type GameConfig, type GameState, type WeatherSnapshot } from '../../engine'
+import { beamTiles, Cell, Dir, weatherToModifiers, type GameConfig, type GameState, type WeatherSnapshot } from '../../engine'
 import type { Pos } from '../motion'
 import { makeGetawayCar, makePoliceCar, type CarParts } from './cars'
 import { asphaltTexture, facadeTextures, glowTexture, roofTexture } from './textures'
@@ -74,10 +75,39 @@ class GeoBuilder {
   }
 }
 
+/**
+ * Whole-picture colour grade per weather, plus a heat-shimmer wobble.
+ * tint: per-channel multiplier; sat: saturation; shimmer: heat-haze strength.
+ */
+const GradeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    tint: { value: new THREE.Vector3(1, 1, 1) },
+    sat: { value: 1.0 },
+    shimmer: { value: 0.0 },
+    time: { value: 0.0 },
+  },
+  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform vec3 tint; uniform float sat; uniform float shimmer; uniform float time;
+    varying vec2 vUv;
+    void main() {
+      vec2 uv = vUv;
+      // Heat haze: small vertical wobble, stronger lower on screen (closer road).
+      uv.x += shimmer * sin(uv.y * 90.0 + time * 4.0) * 0.0018 * (1.2 - uv.y);
+      uv.y += shimmer * sin(uv.x * 70.0 + time * 3.0) * 0.0012 * (1.2 - uv.y);
+      vec4 c = texture2D(tDiffuse, uv);
+      float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = mix(vec3(l), c.rgb, sat) * tint;
+      gl_FragColor = c;
+    }`,
+}
+
 export class CityScene {
   private renderer: THREE.WebGLRenderer
   private composer: EffectComposer
   private bloom: UnrealBloomPass
+  private grade: ShaderPass
   private scene = new THREE.Scene()
   private camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200)
   private camTarget = new THREE.Vector3()
@@ -92,6 +122,10 @@ export class CityScene {
   private safehouse!: { door: THREE.MeshStandardMaterial; beam: THREE.Mesh; ring: THREE.Mesh }
   private beams!: THREE.InstancedMesh
   private rain: THREE.LineSegments | null = null
+  /** Wind: flying debris + dust streaks moving in the wind direction. */
+  private wind: { debris: THREE.InstancedMesh; streaks: THREE.LineSegments; dir: THREE.Vector3; speed: number; seeds: Float32Array } | null = null
+  /** Heat: shimmering haze rising off the road. */
+  private haze: THREE.Sprite[] = []
   private lastMs = 0
   private disposables: Array<{ dispose(): void }> = []
   private readonly night: boolean
@@ -130,6 +164,15 @@ export class CityScene {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), this.night ? 0.55 : 0.35, 0.45, this.night ? 0.78 : 0.95)
     this.composer.addPass(this.bloom)
     this.composer.addPass(new OutputPass())
+    this.grade = new ShaderPass(GradeShader)
+    const g = this.grade.uniforms
+    const mods = weatherToModifiers(weather)
+    if (this.night) { g.tint.value.set(0.9, 0.95, 1.1); g.sat.value = 0.85 }
+    else if (weather.tempC >= 28) { g.tint.value.set(1.14, 0.98, 0.74); g.sat.value = 1.15; g.shimmer.value = 1 }
+    else if (mods.wind) { g.tint.value.set(0.95, 0.99, 1.06); g.sat.value = 0.62 }
+    else if (weather.condition === 'clear') { g.tint.value.set(1.0, 1.02, 1.05); g.sat.value = 1.22 }
+    else { g.tint.value.set(0.96, 0.99, 1.04); g.sat.value = 0.8 }
+    this.composer.addPass(this.grade)
 
     const sp = cfg.maze.playerSpawn
     this.camTarget.set(sp.x + 0.5, 0, sp.y + 0.5)
@@ -138,25 +181,41 @@ export class CityScene {
   // ─── Setup ────────────────────────────────────────────────────────────────
 
   private setupAtmosphere(w: WeatherSnapshot) {
+    const mods = weatherToModifiers(w)
+    const hot = !this.night && w.tempC >= 28
+    const windy = mods.wind !== null
     const overcast = w.condition !== 'clear'
-    const sky = this.night ? 0x0a0f1e : overcast ? 0x9aa3ad : 0xa9c8e8
-    this.scene.background = new THREE.Color(sky)
-    const fogNear = w.condition === 'mist' ? 10 : this.night ? 16 : 26
-    const fogFar = w.condition === 'mist' ? 26 : this.night ? 34 : 60
-    this.scene.fog = new THREE.Fog(sky, fogNear, fogFar)
 
-    const hemi = new THREE.HemisphereLight(this.night ? 0x334466 : 0xdfeaff, this.night ? 0x0a0a12 : 0x3a3530,
-      this.night ? 0.35 : overcast ? 1.1 : 0.9)
+    // Each mood gets its own sky, fog, light colour and strength.
+    const sky = this.night ? 0x0a0f1e
+      : hot ? 0xf0c890 // hazy golden heat
+      : overcast ? 0x9aa3ad
+      : windy ? 0xb4c6d6 // pale, dusty
+      : 0x7fbfff // crisp clear blue
+    this.scene.background = new THREE.Color(sky)
+    const fogNear = w.condition === 'mist' ? 10 : this.night ? 16 : hot ? 14 : windy ? 20 : 30
+    const fogFar = w.condition === 'mist' ? 26 : this.night ? 34 : hot ? 40 : windy ? 48 : 70
+    this.scene.fog = new THREE.Fog(sky, fogNear, fogFar)
+    if (hot) this.renderer.toneMappingExposure = 1.18
+
+    const hemi = new THREE.HemisphereLight(
+      this.night ? 0x334466 : hot ? 0xffd9a8 : windy ? 0xd2dde8 : 0xdfeaff,
+      this.night ? 0x0a0a12 : hot ? 0x5a3a20 : 0x3a3530,
+      this.night ? 0.35 : overcast ? 1.1 : hot ? 1.0 : 0.9)
     this.scene.add(hemi)
 
     const { width: W, height: H } = this.cfg.maze
-    const sun = new THREE.DirectionalLight(this.night ? 0x8899cc : 0xfff1dc, this.night ? 0.35 : overcast ? 1.1 : 2.6)
-    sun.position.set(W / 2 - 10, 22, H / 2 + 12)
+    const sun = new THREE.DirectionalLight(
+      this.night ? 0x8899cc : hot ? 0xffb860 : 0xfff1dc,
+      this.night ? 0.35 : overcast ? 1.1 : hot ? 3.3 : windy ? 2.0 : 2.8)
+    // Heat: a low, late-afternoon sun gives long golden shadows.
+    if (hot) sun.position.set(W / 2 - 18, 12, H / 2 + 6)
+    else sun.position.set(W / 2 - 10, 22, H / 2 + 12)
     sun.target.position.set(W / 2, 0, H / 2)
     sun.castShadow = true
     sun.shadow.mapSize.set(2048, 2048)
-    const r = Math.max(W, H) / 2 + 4
-    Object.assign(sun.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 1, far: 70 })
+    const r = Math.max(W, H) / 2 + 6
+    Object.assign(sun.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 1, far: 80 })
     sun.shadow.bias = -0.0008
     sun.shadow.normalBias = 0.02
     this.scene.add(sun, sun.target)
@@ -164,6 +223,52 @@ export class CityScene {
     if (w.condition === 'rain' || w.condition === 'drizzle' || w.condition === 'thunderstorm' || w.condition === 'snow') {
       this.rain = this.makeRain(w.condition === 'snow')
       this.scene.add(this.rain)
+    }
+    if (windy && mods.wind) this.makeWind(mods.wind.dir, w.windSpeed)
+    if (hot) this.makeHaze()
+  }
+
+  private makeWind(dir: Dir, speed: number) {
+    const v = new THREE.Vector3([0, 0, 1, 0, -1][dir], 0, [0, -1, 0, 1, 0][dir])
+    // Debris: small paper scraps / leaves tumbling along the wind.
+    const n = 220
+    const debris = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(0.16, 0.11),
+      new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 }),
+      n,
+    )
+    const leaf = [0xc9772f, 0x8a5a2b, 0xf1ead8, 0xb8a04a]
+    for (let i = 0; i < n; i++) debris.setColorAt(i, new THREE.Color(leaf[i % leaf.length]))
+    const seeds = new Float32Array(n * 4)
+    for (let i = 0; i < n; i++) {
+      seeds.set([(Math.random() - 0.5) * 30, 0.1 + Math.random() * 1.6, (Math.random() - 0.5) * 24, Math.random() * 10], i * 4)
+    }
+    debris.frustumCulled = false
+    // Dust streaks: fast faint lines.
+    const m = 260
+    const pos = new Float32Array(m * 6)
+    for (let i = 0; i < m; i++) {
+      const x = (Math.random() - 0.5) * 30, y = 0.2 + Math.random() * 3, z = (Math.random() - 0.5) * 24
+      pos.set([x, y, z, x + v.x * 0.6, y, z + v.z * 0.6], i * 6)
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    const streaks = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xf2ece0, transparent: true, opacity: 0.55 }))
+    streaks.frustumCulled = false
+    this.scene.add(debris, streaks)
+    this.wind = { debris, streaks, dir: v, speed: 2 + speed * 0.5, seeds }
+  }
+
+  private makeHaze() {
+    const tex = glowTexture()
+    for (let i = 0; i < 70; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, color: 0xffd08a, transparent: true, opacity: 0.07, depthWrite: false, blending: THREE.AdditiveBlending,
+      }))
+      sp.scale.set(2.5, 1.2, 1)
+      sp.userData = { x: (Math.random() - 0.5) * 26, z: (Math.random() - 0.5) * 20, t: Math.random() * 10 }
+      this.haze.push(sp)
+      this.scene.add(sp)
     }
   }
 
@@ -501,6 +606,41 @@ export class CityScene {
       this.rain.position.set(this.camTarget.x, 0, this.camTarget.z)
     }
 
+    // Wind: debris tumbles along the wind, dust streaks race past.
+    if (this.wind) {
+      const { debris, streaks, dir, speed, seeds } = this.wind
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1)
+      for (let i = 0; i < debris.count; i++) {
+        let x = seeds[i * 4] + dir.x * speed * dt, z = seeds[i * 4 + 2] + dir.z * speed * dt
+        if (x > 15) x -= 30; if (x < -15) x += 30; if (z > 12) z -= 24; if (z < -12) z += 24
+        seeds[i * 4] = x; seeds[i * 4 + 2] = z
+        const t = timeMs / 300 + seeds[i * 4 + 3]
+        const y = seeds[i * 4 + 1] + Math.sin(t) * 0.15
+        e.set(t, t * 1.3, t * 0.7)
+        m4.compose(new THREE.Vector3(this.camTarget.x + x, y, this.camTarget.z + z), q.setFromEuler(e), one)
+        debris.setMatrixAt(i, m4)
+      }
+      debris.instanceMatrix.needsUpdate = true
+      const a = streaks.geometry.getAttribute('position') as THREE.BufferAttribute
+      const arr = a.array as Float32Array
+      const step = speed * 3 * dt
+      for (let i = 0; i < arr.length; i += 6) {
+        for (const k of [0, 3]) { arr[i + k] += dir.x * step; arr[i + k + 2] += dir.z * step }
+        if (arr[i] > 15 || arr[i] < -15) { arr[i] -= Math.sign(arr[i]) * 30; arr[i + 3] -= Math.sign(arr[i + 3]) * 30 }
+        if (arr[i + 2] > 12 || arr[i + 2] < -12) { arr[i + 2] -= Math.sign(arr[i + 2]) * 24; arr[i + 5] -= Math.sign(arr[i + 5]) * 24 }
+      }
+      a.needsUpdate = true
+      streaks.position.set(this.camTarget.x, 0, this.camTarget.z)
+    }
+
+    // Heat: haze shimmers up off the asphalt and fades.
+    for (const sp of this.haze) {
+      const u = sp.userData as { x: number; z: number; t: number }
+      const k = ((timeMs / 2600 + u.t) % 1)
+      sp.position.set(this.camTarget.x + u.x + Math.sin(timeMs / 400 + u.t) * 0.2, 0.2 + k * 1.6, this.camTarget.z + u.z)
+      ;(sp.material as THREE.SpriteMaterial).opacity = 0.09 * Math.sin(k * Math.PI)
+    }
+
     // Chase camera: follows the car from behind-and-above, north stays up so
     // the arrow keys keep matching the screen.
     const { width: MW, height: MH } = this.cfg.maze
@@ -516,6 +656,7 @@ export class CityScene {
     this.camera.position.set(this.camTarget.x, 13, this.camTarget.z + 6.2)
     this.camera.lookAt(this.camTarget.x, 0, this.camTarget.z - 0.6)
 
+    this.grade.uniforms.time.value = timeMs / 1000
     this.composer.render()
     const v = this.player.group.position.clone().project(this.camera)
     return { x: (v.x + 1) / 2, y: (1 - v.y) / 2 }
