@@ -148,3 +148,29 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Feedback round 1 (after CP4 mock playtest), 2026-11-20
+
+### Tanmay's feedback (verbatim summary)
+1. Movement is not smooth.
+2. How are the enemies learning from behaviour (AI)?
+3. "This looks just like Pac-Man." Wants something else, such as a police and thief chase. Chose the **Heist rework** option, not a reskin.
+
+### Agent did
+- **Smoothness.** Root cause: pieces move one tile every 4–6 ticks, but the renderer slid them across in **one** tick (50 ms) and then held them still, giving a hop-and-pause stutter. New `src/game/motion.ts` spreads each move over the piece's full move period at constant speed. The static map is cached in an offscreen canvas. Unit test proves constant per-frame movement. Browser: steady 120 fps (max frame 9.4 ms).
+- **AI answer:** the commander (Phase 5) is not built yet. Cops follow a fixed default plan. Nothing learns yet. See the reply in chat and the Phase 5 plan.
+- **Heist redesign** (plan §1 updated; engine version 1 → 2):
+  - Engine: loot (10 per map, farthest-point sampling on junctions, worth more farther from the start), safehouse at the farthest junction (opens after 7 loot), smoke bombs on the old power-core tiles (blind cops within 7 tiles), 3 lives ("busted"), and score = loot + escape bonus + time bonus − heat/4.
+  - Cops: patrol (commander modes are now `guardLoot` / `guardExit` / `patrol` / `roam`), **headlight vision** (straight ahead down the street, range 8 by day and 5 at night, plus adjacent tiles; you can sneak up behind), chase, a radio call sends nearby patrols to your last-seen spot, then they search it.
+  - Weather: rain makes the car slide, wind pushes patrols, night shortens your sight *and* cop headlights, heat makes smoke last longer.
+  - Renderer: top-down city map (roof colour per block, lane dashes, crosswalks), getaway car, police cars with flashing light bars, headlight beams (red when chasing), gem loot, smoke canisters, a safehouse with lock and pulse, and a dashed last-seen marker.
+  - HUD: points, loot x/10, "Safehouse opens in N loot" or OPEN, a flashing WANTED, lives as cars, and time. New outcome text and landing/home copy.
+- **Balance tool** `src/engine/balance.test.ts` (opt-in: `BALANCE=1`). A cop-blind bot that drives straight for loot escapes about half the time overall. NYC (20/20) and Mumbai (19/20) are easy; Paris (1/20) is hard.
+- Tests: 86 passing. The golden replay hash was **re-pinned on purpose** (rules changed), and the tamper test now edits a stretch of driving (a single edit can be a no-op).
+
+### Not verified / known gaps
+- Not deployed. Not played by a human yet. Difficulty is per city and untuned for humans.
+- Today's leaderboard may hold scores from the old game (engine v1). Unsubmitted v1 runs are rejected on submit ("engine version changed").
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
