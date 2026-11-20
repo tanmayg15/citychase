@@ -174,3 +174,27 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Feedback round 2: "graphics one level above, as close to NFS/GTA as possible", 2026-11-20
+
+### Decision
+Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accepting that Live Chase (Phase 8) may become "documented as next".
+
+### Agent did
+- Added `three@0.170.0` (exact pin) and `@types/three`. The 3D renderer is a **lazy chunk** (`CityScene`, 137 KB gzip), loaded only when a game starts in 3D. Landing and home pages are unaffected.
+- `src/game/three/CityScene.ts` (render-only; the engine and server replay are unchanged):
+  - City built from the maze: buildings per 2x2 lot with varied heights, facades with procedural window textures (lit windows glow at night), gravel roofs, sidewalks inset from the road, asphalt with cracks, lane dashes, crosswalks, and street lamps with light pools at night.
+  - Cars: low-poly original models (metallic-paint getaway car with racing stripes, a two-tone police cruiser), headlights and taillights, the player's spotlight headlight, and police light bars that flash red/blue and light the road while chasing or searching.
+  - Props: spinning gold gems, smoke canisters, a safehouse garage with a green beacon and pulsing ring when open, red/yellow headlight beams on the road, and smoke puffs around blinded cops.
+  - Atmosphere: sun with soft shadows, sky and fog by weather, a bloom pass, ACES tone mapping. Rain/snow particles and a **glossy wet road** in rain; mist fog; at night, dark sky, a car-centred vision circle (follows the car on screen) and dimmer lights.
+  - Camera: a smooth 3/4 chase cam that keeps north up (so arrow keys match the screen) and is clamped inside the map.
+- `GameCanvas`: one game loop, two views. 3D comes with a **2D minimap** overlay. The 2D view stays as a fallback: the 3D view falls back automatically if WebGL/scene creation or rendering fails, and is chosen by default only if WebGL2 and ≥ 4 cores are available. A "Graphics: 3D/2D" toggle is remembered per browser.
+- **Bug found and fixed in testing:** switching from 2D to 3D reused the same `<canvas>` node, which already had a 2D context, so WebGL creation failed and it silently fell back. Fixed with distinct keys per view.
+- Checked in the in-app browser: clear, night and rain all render. **Steady 120 fps** on this Mac (median 8.3 ms, max 9.3 ms per frame). No console errors. 86 tests pass; the production build succeeds.
+
+### Not verified / known gaps
+- Not deployed. Not tested on a phone or a low-end GPU (fallback logic exists but is untested on real weak hardware).
+- Not NFS/GTA fidelity: no real road geometry from OSM (the grid maze stays), no vehicle physics, no destruction. It's a stylised, lit 3D city.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
