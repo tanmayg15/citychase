@@ -30,6 +30,4 @@ export const integrations: Record<
   // City Chase: owner-paid, called ONLY from server actions, which enforce
   // caching, per-user/global caps and the owner kill switch.
   openweathermap: { billing: 'developer' },
-  anthropic: { billing: 'developer' },
-  email: { billing: 'developer' },
 }

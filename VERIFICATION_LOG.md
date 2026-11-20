@@ -278,3 +278,18 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Scope change: no ML; project cleanup (2026-11-20)
+
+### Tanmay's decision
+"Do not add anything RL / NN related; keep it away from ML. Remove any changes or files for that, and any unnecessary files."
+
+### Agent did
+- Deleted the scheduled overnight RL training task and its prompt file. Deleted the `ml/` folder (Python 3.12 venv with PyTorch/NumPy; it was never committed). Removed the `ml/` lines from `.gitignore`.
+- Removed the RL item from plan §12 (radio chatter stays, now explicitly rule-based) and added the decision to the plan. Removed "cops that learn" / "learns from every chase" / "cops that adapt" wording from the lobby and SEO, and an RL mention in `src/game/bot.ts`.
+- **Removed unused scaffold files:** the AI chat agent (`src/ai/`, its `registerAgent` wiring in `worker.ts` and `<AgentTools />` in the app layout), `src/products.ts`, `src/subscriptions.ts`, the `/api-status` debug page, integration notes for Anthropic/OpenAI/email (unused), the Anthropic/email entries in `src/integrations.ts`, `pnpm-workspace.yaml` and `.yarnrc.yml` (the project uses npm), and the scaffold's `tests/collab.spec.ts`. Updated `AGENTS.md`.
+- **Kept on purpose:** `src/cron.ts` and `src/jobs.ts` (empty), because their Durable Object classes (`AppCronRoom`, `AppJobRoom`) are registered in `wrangler.toml` migrations of the deployed app. Removing them would need a `deleted_classes` migration on the live app. Also kept the `/dev/mazes` and `/dev/play` debug pages and the opt-in balance test (all useful for development).
+- Checks: `tsc`, `eslint`, 148 tests and the production build pass; the local server serves `/`, `/play`, `/about`, `/ops` and guest start.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
