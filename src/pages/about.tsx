@@ -8,7 +8,7 @@ const STEPS: Array<[string, string, string]> = [
   ['🗺️', 'Real streets', '20 city districts traced from OpenStreetMap: the roads you drive are the real ones.'],
   ['💎', 'The heist', 'Grab the loot, open the safehouse, get there before the cops box you in. Three cars, three minutes.'],
   ['🌦️', 'Live weather', "Each city's real weather changes the rules: rain makes you slide, fog shortens the cops' sight, night darkens the map."],
-  ['🔥', 'Gadgets', 'Nitro, oil slicks and a disguise, with crates on the map to refill them.'],
+  ['🔥', 'Gadgets', 'Nitro, oil slicks and a disguise (5 s invisible and uncatchable), with crates on the map to refill them.'],
   ['👻', 'Race the ghost', "Drive against the board leader's actual run, replayed next to you."],
   ['✅', 'Fair scores', 'The server replays every run with the same deterministic engine before a score reaches the board.'],
 ]

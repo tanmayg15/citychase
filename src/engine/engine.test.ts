@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CLEAR_WEATHER, DEFAULT_PLAN, Dir, ENGINE_VERSION, MAX_TICKS, REPLAYABLE_VERSIONS, canSee,
+  CLEAR_WEATHER, DEFAULT_PLAN, Dir, ENGINE_VERSION, Gadget, MAX_TICKS, canSee, isReplayable,
   createGame, hashState, parseMaze, planOrDefault, replay, rngInt, step,
   validateInputLog, validatePlan, weatherToModifiers,
   type GameConfig, type InputLog, type WeatherSnapshot,
@@ -85,7 +85,7 @@ describe('determinism', () => {
   })
 })
 
-describe('older runs still replay (REPLAYABLE_VERSIONS)', () => {
+describe('older runs still replay (isReplayable)', () => {
   it('v2 golden run: same score, length and outcome as when it was pinned under v2', () => {
     const s = replay(config(), randomLog(2026))
     expect({ score: s.score, tick: s.tick, status: s.status }).toEqual({ score: 291, tick: 586, status: 'busted' })
@@ -105,9 +105,13 @@ describe('older runs still replay (REPLAYABLE_VERSIONS)', () => {
     }
   })
 
-  it('accepts v2 and v3 only', () => {
-    expect(REPLAYABLE_VERSIONS).toEqual([2, 3])
-    expect(REPLAYABLE_VERSIONS).toContain(ENGINE_VERSION)
+  it('accepts v2, v3 without a disguise, and the current version', () => {
+    expect(ENGINE_VERSION).toBe(4)
+    expect(isReplayable(4, [[3, Gadget.Disguise]])).toBe(true)
+    expect(isReplayable(2, [[3, Dir.Up]])).toBe(true)
+    expect(isReplayable(3, [[3, Dir.Up], [9, Gadget.Nitro]])).toBe(true)
+    expect(isReplayable(3, [[3, Gadget.Disguise]])).toBe(false)
+    expect(isReplayable(1, [])).toBe(false)
   })
 })
 

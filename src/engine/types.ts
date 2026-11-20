@@ -15,7 +15,8 @@ export enum Dir {
 /**
  * Gadget activations share the input log with directions: [tick, 5|6|7].
  * Nitro doubles your speed briefly; Oil leaves a slick that spins out the
- * next cop to drive over it; Disguise makes every cop lose sight of you.
+ * next cop to drive over it; Disguise makes every cop lose sight of you and
+ * lets you drive past (or through) them without being caught.
  */
 export enum Gadget {
   Nitro = 5,

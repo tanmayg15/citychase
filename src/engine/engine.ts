@@ -22,14 +22,20 @@ export const MAX_TICKS = 3 * 60 * TICK_RATE // runs are capped at 3 minutes
 export const MAX_INPUTS = 4000
 export const START_LIVES = 3
 /** Bump when rules change: stored with each run so old replays can be told apart. */
-export const ENGINE_VERSION = 3
+export const ENGINE_VERSION = 4
 /**
- * Older versions whose recorded runs still replay exactly the same here. v3
- * only added gadgets (inputs 5-7, which v2 logs never contain) and crates
- * (which change nothing unless a gadget is used), so a v2 log plays out move
- * for move as it did. Used to let older top runs race as ghosts.
+ * Can a run recorded under an older engine version be replayed here move for
+ * move (used to let older top runs race as ghosts)?
+ *  - v2: no gadgets at all; v3 only added gadgets (inputs 5-7) and crates
+ *    (no effect unless a gadget is used), so a v2 log plays out unchanged.
+ *  - v3: identical to v4 unless the disguise was used (v4 made a disguised car
+ *    uncatchable), so a v3 log without a disguise input replays unchanged.
  */
-export const REPLAYABLE_VERSIONS: readonly number[] = [2, 3]
+export function isReplayable(version: number, log: ReadonlyArray<readonly [number, number]>): boolean {
+  if (version === ENGINE_VERSION || version === 2) return true
+  if (version === 3) return !log.some(([, input]) => input === Gadget.Disguise)
+  return false
+}
 
 export const PLAYER_PERIOD = 4 // ticks per tile (5 tiles/s)
 export const PATROL_PERIOD = 5
@@ -50,7 +56,7 @@ export const NITRO_PERIOD = 2
 export const OIL_TICKS = 400 // a slick lasts 20 s
 export const OIL_SPIN = 80 // a cop that hits it is out for 4 s
 export const MAX_OILS = 3
-export const DISGUISE_TICKS = 100 // 5 s unseen
+export const DISGUISE_TICKS = 100 // 5 s unseen and uncatchable
 export const CRATE_COUNT = 3
 /** Every this many ticks of being seen costs 1 point. */
 export const HEAT_PER_POINT = 4
@@ -477,6 +483,8 @@ function movePlayer(cfg: GameConfig, s: GameState): void {
 /** Returns true if the player was caught (caller stops processing this tick). */
 function caught(cfg: GameConfig, s: GameState): boolean {
   const p = s.player
+  // Disguised, you can drive straight past (or through) a cop.
+  if (s.tick < s.disguiseUntil) return false
   const hit = s.cops.some((c) => c.x === p.x && c.y === p.y && c.status !== 'garage' && c.status !== 'blind')
   if (!hit) return false
   s.lives--

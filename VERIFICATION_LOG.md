@@ -452,3 +452,16 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 - Night also hid the ghost behind the darkness. It now shows a 👻 marker above the night overlay in 3D (clamped to the screen edge), and on the minimap it's drawn above the night mask.
 - Checked locally: Bengaluru · Night with the ghost shows the race in the HUD and the moving 👻 marker. tsc and eslint are clean; 191 tests pass.
 **Needs human verification:** after deploy, race the existing Bengaluru night #1.
+
+## 2026-11-20 — Disguise now also stops catches (engine v4)
+**Tanmay reported:** police could still catch the car while disguised.
+**Agent did:** while the disguise lasts (5 s), contact with a cop no longer costs a car. This is a rule change, so `ENGINE_VERSION` went from 3 to 4. `isReplayable()` replaces the fixed version list:
+- v2 runs are still accepted as ghosts.
+- v3 runs are accepted if they never used the disguise (the only input whose meaning changed).
+
+Tests:
+- a new unit test parks a cop on the disguised car (no catch), then checks the catch returns once the disguise ends;
+- in-browser on the real Paris map, 30 runs had 592 disguised contacts and 0 catches.
+
+192 tests pass; tsc and eslint are clean.
+**Needs human verification:** disguise, then drive through a cop in the live game.

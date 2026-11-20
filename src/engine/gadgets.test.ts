@@ -67,6 +67,22 @@ describe('gadgets', () => {
     expect(s.heat).toBe(heat0)
   })
 
+  it('disguise: a cop on your tile cannot catch you while it lasts, and can again after', () => {
+    const s = createGame(cfg)
+    while (s.cops.every((c) => c.status === 'garage')) step(cfg, s)
+    step(cfg, s, Gadget.Disguise)
+    const c = s.cops.find((k) => k.status !== 'garage')!
+    const lives = s.lives
+    for (let i = 0; i < DISGUISE_TICKS - 5; i++) {
+      c.x = s.player.x; c.y = s.player.y // park the cop on top of you
+      step(cfg, s)
+    }
+    expect(s.lives).toBe(lives)
+    expect(s.events.some((e) => e.type === 'caught')).toBe(false)
+    for (let i = 0; i < 10; i++) { c.x = s.player.x; c.y = s.player.y; c.status = 'chase'; step(cfg, s) }
+    expect(s.lives).toBe(lives - 1)
+  })
+
   it('gadget inputs are valid in the log and replay exactly', () => {
     const log: InputLog = [[1, Dir.Left], [5, Gadget.Nitro], [30, Dir.Up], [40, Gadget.Oil], [60, Gadget.Disguise], [90, Dir.Right]]
     expect(validateInputLog(log).ok).toBe(true)
