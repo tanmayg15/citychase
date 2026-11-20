@@ -1,16 +1,20 @@
 /**
- * City Chase deterministic engine.
+ * City Chase deterministic heist engine.
+ *
+ * You drive the getaway car: grab loot, reach the safehouse once it opens,
+ * and don't get caught. Cops patrol, spot you by line of sight down a street,
+ * chase, radio your last-seen spot, then search it. Smoke bombs blind them.
  *
  * Rules for this file (they keep browser and server replays identical):
  *  - integer math only; no Math.random, Date.now, or float accumulation
  *  - all randomness from the seeded RNG stored in GameState
- *  - fixed tick rate; entities move one whole tile every N ticks
+ *  - fixed tick rate; pieces move one whole tile every N ticks
  */
-import { canMove, REVERSE, stepPoint } from './maze'
+import { canMove, isOpen, REVERSE, stepPoint } from './maze'
 import { rngInt, seedFromString } from './rng'
 import {
   Cell, Dir,
-  type GameConfig, type GameState, type GhostState, type InputLog, type Point,
+  type CopState, type GameConfig, type GameState, type InputLog, type Loot, type Maze, type Point,
 } from './types'
 
 export const TICK_RATE = 20
@@ -18,140 +22,328 @@ export const MAX_TICKS = 3 * 60 * TICK_RATE // runs are capped at 3 minutes
 export const MAX_INPUTS = 4000
 export const START_LIVES = 3
 /** Bump when rules change: stored with each run so old replays can be told apart. */
-export const ENGINE_VERSION = 1
+export const ENGINE_VERSION = 2
 
 export const PLAYER_PERIOD = 4 // ticks per tile (5 tiles/s)
-export const GHOST_PERIOD = 5
-export const FRIGHTENED_PERIOD = 8
-export const EATEN_PERIOD = 2
-export const DEATH_PAUSE = 40
-export const GHOST_RESPAWN = 40
-export const SCATTER_CYCLE = 400 // every 20 s ...
-export const SCATTER_LENGTH = 100 // ... ghosts retreat to corners for 5 s
+export const PATROL_PERIOD = 5
+export const CHASE_PERIOD = 4
+export const SEARCH_PERIOD = 5
+export const BLIND_PERIOD = 9
+export const CAUGHT_PAUSE = 40
+export const SEARCH_TICKS = 120 // how long cops comb the last-seen area
+export const RADIO_RANGE = 12 // tiles (Manhattan) a spotting call reaches
 
-export const ORB_POINTS = 10
-export const CORE_POINTS = 50
-export const GHOST_POINTS = 200
-export const CLEAR_BONUS = 1000
+export const LOOT_COUNT = 10
+export const LOOT_TO_OPEN_EXIT = 7
+export const SMOKE_RADIUS = 7
+export const ESCAPE_BONUS = 1000
+/** Every this many ticks of being seen costs 1 point. */
+export const HEAT_PER_POINT = 4
 
-/** Tie-break order when ghosts pick a direction. */
-const GHOST_DIR_ORDER: Dir[] = [Dir.Up, Dir.Left, Dir.Down, Dir.Right]
+/** Tie-break order when cops pick a direction. */
+const DIR_ORDER: Dir[] = [Dir.Up, Dir.Left, Dir.Down, Dir.Right]
 
-function countPellets(cells: number[]): number {
+// ─── Map analysis (deterministic, from the maze only) ───────────────────────
+
+function exits(m: Maze, x: number, y: number): number {
   let n = 0
-  for (const c of cells) if (c === Cell.Orb || c === Cell.Core) n++
+  for (const d of DIR_ORDER) if (canMove(m, x, y, d)) n++
   return n
 }
 
-function spawnGhosts(cfg: GameConfig, state: { rng: number }, fromTick: number): GhostState[] {
-  const ghosts: GhostState[] = []
-  for (let i = 0; i < cfg.plan.ghosts.length; i++) {
-    const home = cfg.maze.ghostSpawns[i % cfg.maze.ghostSpawns.length]
-    const [jitter, rng] = rngInt(state.rng, 40)
-    state.rng = rng
-    ghosts.push({
-      x: home.x, y: home.y, dir: Dir.Up,
-      mode: cfg.plan.ghosts[i],
-      status: 'house',
-      releaseTick: fromTick + i * 60 + jitter,
-      homeX: home.x, homeY: home.y,
-      patrolIdx: 0, clock: 0, windClock: 0,
-    })
+/** BFS distances (in tiles) from `from` over open tiles. -1 = unreachable. */
+export function bfs(m: Maze, from: Point): number[] {
+  const dist = new Array(m.width * m.height).fill(-1)
+  const q = [from.y * m.width + from.x]
+  dist[q[0]] = 0
+  for (let h = 0; h < q.length; h++) {
+    const x = q[h] % m.width, y = Math.floor(q[h] / m.width)
+    for (const d of DIR_ORDER) {
+      const n = stepPoint(m, x, y, d)
+      const k = n.y * m.width + n.x
+      if (dist[k] === -1 && isOpen(m, n.x, n.y)) { dist[k] = dist[q[h]] + 1; q.push(k) }
+    }
   }
-  return ghosts
+  return dist
+}
+
+/**
+ * Safehouse = the junction farthest (by road) from the start. Loot = up to
+ * LOOT_COUNT junctions spread out by farthest-point sampling, worth more the
+ * farther they are from the start. Same for every player on a given maze.
+ */
+export function planHeist(m: Maze): { exit: Point; loot: Loot[] } {
+  const fromStart = bfs(m, m.playerSpawn)
+  const garage = m.ghostSpawns.map((g) => bfs(m, g))
+  const junctions: number[] = []
+  for (let k = 0; k < m.cells.length; k++) {
+    const x = k % m.width, y = Math.floor(k / m.width)
+    if (!isOpen(m, x, y) || fromStart[k] < 5) continue
+    if (garage.some((d) => d[k] >= 0 && d[k] < 3)) continue
+    if (m.cells[k] === Cell.Core) continue // smoke spot
+    if (exits(m, x, y) >= 3) junctions.push(k)
+  }
+  const at = (k: number): Point => ({ x: k % m.width, y: Math.floor(k / m.width) })
+
+  let exitK = junctions[0] ?? m.playerSpawn.y * m.width + m.playerSpawn.x
+  for (const k of junctions) if (fromStart[k] > fromStart[exitK]) exitK = k
+
+  const fromExit = bfs(m, at(exitK))
+  const nearest = new Map<number, number>()
+  for (const k of junctions) if (k !== exitK) nearest.set(k, Math.min(fromStart[k], fromExit[k]))
+  const chosen: number[] = []
+  while (chosen.length < LOOT_COUNT) {
+    let best = -1, bestD = -1
+    for (const [k, d] of nearest) if (d > bestD) { best = k; bestD = d }
+    if (best < 0 || bestD < 3) break
+    chosen.push(best)
+    nearest.delete(best)
+    const fromBest = bfs(m, at(best))
+    for (const [k, d] of nearest) nearest.set(k, Math.min(d, fromBest[k]))
+  }
+  chosen.sort((a, b) => a - b)
+  return {
+    exit: at(exitK),
+    loot: chosen.map((k) => ({ ...at(k), value: 100 + 50 * Math.floor(fromStart[k] / 4), taken: false })),
+  }
+}
+
+// ─── Setup ──────────────────────────────────────────────────────────────────
+
+function spawnCops(cfg: GameConfig, s: { rng: number }, fromTick: number): CopState[] {
+  return cfg.plan.cops.map((mode, i) => {
+    const home = cfg.maze.ghostSpawns[i % cfg.maze.ghostSpawns.length]
+    const [jitter, rng] = rngInt(s.rng, 40)
+    s.rng = rng
+    const cop: CopState = {
+      x: home.x, y: home.y, dir: Dir.Up, mode, status: 'garage',
+      releaseTick: fromTick + 20 + i * 40 + jitter,
+      homeX: home.x, homeY: home.y, tx: home.x, ty: home.y,
+      patrolIdx: i, until: 0, clock: 0, windClock: 0,
+    }
+    return cop
+  })
 }
 
 export function createGame(cfg: GameConfig): GameState {
   const holder = { rng: cfg.seed >>> 0 }
-  const ghosts = spawnGhosts(cfg, holder, 0)
-  const cells = [...cfg.maze.cells]
+  const cops = spawnCops(cfg, holder, 0)
+  const heist = planHeist(cfg.maze)
+  const smokes = []
+  for (let k = 0; k < cfg.maze.cells.length; k++) {
+    if (cfg.maze.cells[k] === Cell.Core) {
+      smokes.push({ x: k % cfg.maze.width, y: Math.floor(k / cfg.maze.width), taken: false })
+    }
+  }
   return {
     tick: 0,
     rng: holder.rng,
     status: 'playing',
     score: 0,
+    lootScore: 0,
+    lootTaken: 0,
     lives: START_LIVES,
-    pelletsLeft: countPellets(cells),
-    cells,
+    loot: heist.loot,
+    smokes,
+    exit: { ...heist.exit, open: false },
+    heat: 0,
+    lastSeen: null,
     player: {
       x: cfg.maze.playerSpawn.x, y: cfg.maze.playerSpawn.y,
       dir: Dir.None, wanted: Dir.None, slip: 0, clock: 0,
     },
-    ghosts,
-    powerUntil: 0,
-    combo: 0,
+    cops,
     pauseUntil: 0,
     events: [],
   }
 }
 
-function dist2(ax: number, ay: number, bx: number, by: number): number {
-  const dx = ax - bx, dy = ay - by
+export function scoreOf(s: GameState): number {
+  const escape = s.status === 'escaped' ? ESCAPE_BONUS + ((MAX_TICKS - s.tick) >> 1) : 0
+  return Math.max(0, s.lootScore + escape - Math.floor(s.heat / HEAT_PER_POINT))
+}
+
+// ─── Vision ─────────────────────────────────────────────────────────────────
+
+/**
+ * True if a cop at (cx,cy) facing `dir` can see (px,py): right next to it in any
+ * direction, or straight ahead down the same street (headlights) within
+ * `range`, with no building in between. You can sneak up behind a cop.
+ */
+export function canSee(m: Maze, cx: number, cy: number, dir: Dir, px: number, py: number, range: number): boolean {
+  const dx = px - cx, dy = py - cy
+  if (Math.abs(dx) + Math.abs(dy) <= 1) return true
+  if (dx !== 0 && dy !== 0) return false
+  const sx = Math.sign(dx), sy = Math.sign(dy)
+  const facing = [0, 0, 1, 0, -1][dir] === sx && [0, -1, 0, 1, 0][dir] === sy
+  if (!facing) return false
+  const n = Math.abs(dx + dy)
+  if (n > range) return false
+  for (let i = 1; i < n; i++) if (!isOpen(m, cx + sx * i, cy + sy * i)) return false
+  return true
+}
+
+/** Tiles a cop's headlights currently light up (for rendering the beam). */
+export function beamTiles(m: Maze, cx: number, cy: number, dir: Dir, range: number): Point[] {
+  const out: Point[] = []
+  if (dir === Dir.None) return out
+  const sx = [0, 0, 1, 0, -1][dir], sy = [0, -1, 0, 1, 0][dir]
+  for (let i = 1; i <= range; i++) {
+    const x = cx + sx * i, y = cy + sy * i
+    if (x < 0 || y < 0 || x >= m.width || y >= m.height || !isOpen(m, x, y)) break
+    out.push({ x, y })
+  }
+  return out
+}
+
+// ─── Cops ───────────────────────────────────────────────────────────────────
+
+function dist2(a: Point, b: Point): number {
+  const dx = a.x - b.x, dy = a.y - b.y
   return dx * dx + dy * dy
 }
 
-function corner(cfg: GameConfig, i: number): Point {
-  const { width: w, height: h } = cfg.maze
-  return [{ x: 1, y: 1 }, { x: w - 2, y: 1 }, { x: 1, y: h - 2 }, { x: w - 2, y: h - 2 }][i % 4]
-}
-
-/** Where a ghost is heading, from its plan mode. */
-function ghostTarget(cfg: GameConfig, s: GameState, g: GhostState, i: number): Point {
-  if (g.status === 'eaten') return { x: g.homeX, y: g.homeY }
-  if (s.tick % SCATTER_CYCLE < SCATTER_LENGTH) return corner(cfg, i)
-  const p = s.player
-  const ahead = (n: number): Point => ({
-    x: p.x + [0, 0, n, 0, -n][p.dir], y: p.y + [0, -n, 0, n, 0][p.dir],
-  })
-  const chokes = cfg.plan.chokepoints
-  switch (g.mode) {
-    case 'chase':
-      return { x: p.x, y: p.y }
-    case 'ambush':
-      return ahead(4)
-    case 'patrol': {
-      if (chokes.length === 0) return corner(cfg, i)
-      const c = chokes[g.patrolIdx % chokes.length]
-      if (c.x === g.x && c.y === g.y) g.patrolIdx = (g.patrolIdx + 1) % chokes.length
-      return chokes[g.patrolIdx % chokes.length]
-    }
-    case 'cutoff': {
-      if (chokes.length === 0) return ahead(2)
-      let best = chokes[0], bestD = Infinity
-      for (const c of chokes) {
-        const d = Math.abs(c.x - p.x) + Math.abs(c.y - p.y)
-        if (d < bestD) { best = c; bestD = d }
-      }
-      return best
-    }
+function randomJunction(cfg: GameConfig, s: GameState): Point {
+  const m = cfg.maze
+  for (let tries = 0; tries < 40; tries++) {
+    const [k, rng] = rngInt(s.rng, m.cells.length)
+    s.rng = rng
+    const x = k % m.width, y = Math.floor(k / m.width)
+    if (isOpen(m, x, y) && exits(m, x, y) >= 3) return { x, y }
   }
+  return { ...m.playerSpawn }
 }
 
-function chooseGhostDir(cfg: GameConfig, s: GameState, g: GhostState, i: number): Dir {
-  const options = GHOST_DIR_ORDER.filter(
-    (d) => d !== REVERSE[g.dir] && canMove(cfg.maze, g.x, g.y, d),
-  )
-  if (options.length === 0) return REVERSE[g.dir] // dead end: turn back
-  if (g.status === 'frightened') {
+function randomJunctionNear(cfg: GameConfig, s: GameState, p: Point, r: number): Point {
+  for (let tries = 0; tries < 20; tries++) {
+    const j = randomJunction(cfg, s)
+    if (Math.abs(j.x - p.x) + Math.abs(j.y - p.y) <= r) return j
+  }
+  return { x: p.x, y: p.y }
+}
+
+/** Pick a new patrol destination for a cop, from its commander-assigned mode. */
+function nextPatrolTarget(cfg: GameConfig, s: GameState, c: CopState): Point {
+  switch (c.mode) {
+    case 'guardLoot': {
+      const left = s.loot.filter((l) => !l.taken)
+      if (left.length === 0) return { x: s.exit.x, y: s.exit.y }
+      c.patrolIdx = (c.patrolIdx + 1) % left.length
+      return { x: left[c.patrolIdx].x, y: left[c.patrolIdx].y }
+    }
+    case 'guardExit':
+      // Circle the safehouse: alternate between it and a nearby junction.
+      c.patrolIdx++
+      return c.patrolIdx % 2 ? { x: s.exit.x, y: s.exit.y } : randomJunctionNear(cfg, s, s.exit, 6)
+    case 'patrol': {
+      const chokes = cfg.plan.chokepoints
+      if (chokes.length === 0) return randomJunction(cfg, s)
+      c.patrolIdx = (c.patrolIdx + 1) % chokes.length
+      return chokes[c.patrolIdx]
+    }
+    case 'roam':
+      return randomJunction(cfg, s)
+  }
+  return randomJunction(cfg, s)
+}
+
+function chooseDir(cfg: GameConfig, s: GameState, c: CopState, wander: boolean): Dir {
+  const options = DIR_ORDER.filter((d) => d !== REVERSE[c.dir] && canMove(cfg.maze, c.x, c.y, d))
+  if (options.length === 0) return REVERSE[c.dir] // dead end: turn back
+  if (wander) {
     const [k, rng] = rngInt(s.rng, options.length)
     s.rng = rng
     return options[k]
   }
-  const t = ghostTarget(cfg, s, g, i)
+  const t = { x: c.tx, y: c.ty }
   let best = options[0], bestD = Infinity
   for (const d of options) {
-    const n = stepPoint(cfg.maze, g.x, g.y, d)
-    const dd = dist2(n.x, n.y, t.x, t.y)
+    const dd = dist2(stepPoint(cfg.maze, c.x, c.y, d), t)
     if (dd < bestD) { best = d; bestD = dd }
   }
   return best
 }
 
-function moveGhost(cfg: GameConfig, g: GhostState, dir: Dir): void {
-  const n = stepPoint(cfg.maze, g.x, g.y, dir)
-  g.x = n.x
-  g.y = n.y
+export function copPeriod(c: CopState): number {
+  switch (c.status) {
+    case 'chase': return CHASE_PERIOD
+    case 'search': return SEARCH_PERIOD
+    case 'blind': return BLIND_PERIOD
+    default: return PATROL_PERIOD
+  }
 }
+
+/** Vision pass: who sees the player this tick; a sighting radios nearby units. */
+function updateVision(cfg: GameConfig, s: GameState): void {
+  const p = s.player
+  let seen = false
+  s.cops.forEach((c, i) => {
+    if (c.status === 'garage' || c.status === 'blind') return
+    if (!canSee(cfg.maze, c.x, c.y, c.dir, p.x, p.y, cfg.modifiers.copVision)) {
+      if (c.status === 'chase') {
+        // Lost sight: drive to where you were last seen and search there.
+        c.status = 'search'
+        c.tx = s.lastSeen?.x ?? p.x
+        c.ty = s.lastSeen?.y ?? p.y
+        c.until = s.tick + SEARCH_TICKS
+      }
+      return
+    }
+    seen = true
+    if (c.status !== 'chase') s.events.push({ type: 'spotted', cop: i })
+    c.status = 'chase'
+    c.tx = p.x
+    c.ty = p.y
+  })
+  if (!seen) return
+  s.heat++
+  s.lastSeen = { x: p.x, y: p.y }
+  // Radio call: patrolling units in range head for the sighting.
+  for (const c of s.cops) {
+    if (c.status === 'patrol' && Math.abs(c.x - p.x) + Math.abs(c.y - p.y) <= RADIO_RANGE) {
+      c.status = 'search'
+      c.tx = p.x
+      c.ty = p.y
+      c.until = s.tick + SEARCH_TICKS
+    }
+  }
+}
+
+function moveCop(cfg: GameConfig, s: GameState, c: CopState): void {
+  if (c.status === 'blind' && s.tick >= c.until) {
+    c.status = 'search'
+    c.until = s.tick + SEARCH_TICKS
+  }
+  if (c.status === 'search' && s.tick >= c.until) c.status = 'patrol'
+
+  const atTarget = c.x === c.tx && c.y === c.ty
+  if (c.status === 'patrol' && atTarget) {
+    const t = nextPatrolTarget(cfg, s, c)
+    c.tx = t.x
+    c.ty = t.y
+  }
+  // Blinded cops, and searchers who reached the spot, drive around at random.
+  const wander = c.status === 'blind' || (c.status === 'search' && atTarget)
+  c.dir = chooseDir(cfg, s, c, wander)
+  const n = stepPoint(cfg.maze, c.x, c.y, c.dir)
+  c.x = n.x
+  c.y = n.y
+
+  const wind = cfg.modifiers.wind
+  if (wind && (c.status === 'patrol' || c.status === 'search')) {
+    c.windClock++
+    if (c.windClock >= wind.every) {
+      c.windClock = 0
+      if (canMove(cfg.maze, c.x, c.y, wind.dir)) {
+        const w = stepPoint(cfg.maze, c.x, c.y, wind.dir)
+        c.x = w.x
+        c.y = w.y
+      }
+    }
+  }
+}
+
+// ─── Player ─────────────────────────────────────────────────────────────────
 
 function movePlayer(cfg: GameConfig, s: GameState): void {
   const p = s.player
@@ -170,62 +362,59 @@ function movePlayer(cfg: GameConfig, s: GameState): void {
   p.x = n.x
   p.y = n.y
 
-  const idx = p.y * cfg.maze.width + p.x
-  const cell = s.cells[idx]
-  if (cell === Cell.Orb) {
-    s.cells[idx] = Cell.Empty
-    s.score += ORB_POINTS
-    s.pelletsLeft--
-    s.events.push({ type: 'orb' })
-  } else if (cell === Cell.Core) {
-    s.cells[idx] = Cell.Empty
-    s.score += CORE_POINTS
-    s.pelletsLeft--
-    s.powerUntil = s.tick + cfg.modifiers.powerTicks
-    s.combo = 0
-    for (const g of s.ghosts) {
-      if (g.status === 'active' || g.status === 'frightened') {
-        if (g.status === 'active') g.dir = REVERSE[g.dir]
-        g.status = 'frightened'
+  for (const l of s.loot) {
+    if (!l.taken && l.x === p.x && l.y === p.y) {
+      l.taken = true
+      s.lootScore += l.value
+      s.lootTaken++
+      s.events.push({ type: 'loot', value: l.value })
+      if (!s.exit.open && s.lootTaken >= Math.min(LOOT_TO_OPEN_EXIT, s.loot.length)) {
+        s.exit.open = true
+        s.events.push({ type: 'exitOpen' })
       }
     }
-    s.events.push({ type: 'core' })
   }
+  for (const b of s.smokes) {
+    if (!b.taken && b.x === p.x && b.y === p.y) {
+      b.taken = true
+      let blinded = 0
+      for (const c of s.cops) {
+        if (c.status !== 'garage' && Math.abs(c.x - p.x) + Math.abs(c.y - p.y) <= SMOKE_RADIUS) {
+          c.status = 'blind'
+          c.until = s.tick + cfg.modifiers.powerTicks
+          blinded++
+        }
+      }
+      s.events.push({ type: 'smoke', blinded })
+    }
+  }
+  if (s.exit.open && p.x === s.exit.x && p.y === s.exit.y) s.status = 'escaped'
 }
 
-/** Returns true if the player died (caller stops processing this tick). */
-function collide(cfg: GameConfig, s: GameState, i: number): boolean {
-  const g = s.ghosts[i]
-  if (g.x !== s.player.x || g.y !== s.player.y) return false
-  if (g.status === 'frightened') {
-    const points = GHOST_POINTS << Math.min(s.combo, 3)
-    s.score += points
-    s.combo++
-    g.status = 'eaten'
-    s.events.push({ type: 'ghostEaten', ghost: i, points })
-    return false
-  }
-  if (g.status !== 'active') return false
-
+/** Returns true if the player was caught (caller stops processing this tick). */
+function caught(cfg: GameConfig, s: GameState): boolean {
+  const p = s.player
+  const hit = s.cops.some((c) => c.x === p.x && c.y === p.y && c.status !== 'garage' && c.status !== 'blind')
+  if (!hit) return false
   s.lives--
-  s.events.push({ type: 'death', livesLeft: s.lives })
+  s.events.push({ type: 'caught', livesLeft: s.lives })
   if (s.lives <= 0) {
-    s.status = 'lost'
+    s.status = 'busted'
     return true
   }
-  const p = s.player
   p.x = cfg.maze.playerSpawn.x
   p.y = cfg.maze.playerSpawn.y
   p.dir = Dir.None
   p.wanted = Dir.None
   p.slip = 0
   p.clock = 0
-  s.powerUntil = 0
-  s.combo = 0
-  s.ghosts = spawnGhosts(cfg, s, s.tick + DEATH_PAUSE)
-  s.pauseUntil = s.tick + DEATH_PAUSE
+  s.lastSeen = null
+  s.cops = spawnCops(cfg, s, s.tick + CAUGHT_PAUSE)
+  s.pauseUntil = s.tick + CAUGHT_PAUSE
   return true
 }
+
+// ─── Tick ───────────────────────────────────────────────────────────────────
 
 /**
  * Advance one tick. `input` is the direction pressed on this tick (Dir.None if
@@ -243,57 +432,37 @@ export function step(cfg: GameConfig, s: GameState, input: Dir = Dir.None): Game
   }
 
   if (s.tick >= s.pauseUntil) {
-    if (s.powerUntil !== 0 && s.tick >= s.powerUntil) {
-      s.powerUntil = 0
-      for (const g of s.ghosts) if (g.status === 'frightened') g.status = 'active'
-    }
-
-    let died = false
+    let done = false
     p.clock++
     if (p.clock >= PLAYER_PERIOD) {
       p.clock = 0
       movePlayer(cfg, s)
-      for (let i = 0; i < s.ghosts.length && !died; i++) died = collide(cfg, s, i)
+      done = s.status !== 'playing' || caught(cfg, s)
     }
 
-    for (let i = 0; i < s.ghosts.length && !died; i++) {
-      const g = s.ghosts[i]
-      if (g.status === 'house') {
-        if (s.tick >= g.releaseTick) g.status = s.powerUntil ? 'frightened' : 'active'
+    for (let i = 0; i < s.cops.length && !done; i++) {
+      const c = s.cops[i]
+      if (c.status === 'garage') {
+        if (s.tick >= c.releaseTick) {
+          c.status = 'patrol'
+          const t = nextPatrolTarget(cfg, s, c)
+          c.tx = t.x
+          c.ty = t.y
+        }
         continue
       }
-      const period = g.status === 'eaten' ? EATEN_PERIOD
-        : g.status === 'frightened' ? FRIGHTENED_PERIOD : GHOST_PERIOD
-      g.clock++
-      if (g.clock < period) continue
-      g.clock = 0
-      g.dir = chooseGhostDir(cfg, s, g, i)
-      moveGhost(cfg, g, g.dir)
-
-      const wind = cfg.modifiers.wind
-      if (wind && g.status !== 'eaten') {
-        g.windClock++
-        if (g.windClock >= wind.every) {
-          g.windClock = 0
-          if (canMove(cfg.maze, g.x, g.y, wind.dir)) moveGhost(cfg, g, wind.dir)
-        }
-      }
-
-      if (g.status === 'eaten' && g.x === g.homeX && g.y === g.homeY) {
-        g.status = 'house'
-        g.releaseTick = s.tick + GHOST_RESPAWN
-      }
-      died = collide(cfg, s, i)
+      c.clock++
+      if (c.clock < copPeriod(c)) continue
+      c.clock = 0
+      moveCop(cfg, s, c)
+      done = caught(cfg, s)
     }
-
-    if (s.status === 'playing' && s.pelletsLeft === 0) {
-      s.status = 'won'
-      s.score += CLEAR_BONUS + ((MAX_TICKS - s.tick) >> 1)
-    }
+    if (!done) updateVision(cfg, s)
   }
 
   s.tick++
   if (s.status === 'playing' && s.tick >= MAX_TICKS) s.status = 'timeout'
+  s.score = scoreOf(s)
   if (s.status !== 'playing') s.events.push({ type: 'end', status: s.status })
   return s
 }

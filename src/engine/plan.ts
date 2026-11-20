@@ -1,18 +1,18 @@
 import { isOpen } from './maze'
-import type { CommanderPlan, GhostMode, Maze, Point } from './types'
+import type { CommanderPlan, CopMode, Maze, Point } from './types'
 
-export const GHOST_COUNT = 4
+export const COP_COUNT = 4
 export const MAX_CHOKEPOINTS = 6
 export const MAX_TAUNT = 120
-const MODES: GhostMode[] = ['chase', 'ambush', 'patrol', 'cutoff']
+const MODES: CopMode[] = ['guardLoot', 'guardExit', 'patrol', 'roam']
 
 /** Used whenever the AI is off, capped, failed, or returned something invalid. */
 export const DEFAULT_PLAN: CommanderPlan = {
   version: 1,
   personality: 'default',
-  ghosts: ['chase', 'ambush', 'patrol', 'cutoff'],
+  cops: ['guardLoot', 'roam', 'patrol', 'guardExit'],
   chokepoints: [],
-  taunt: 'The city never sleeps. Neither do we.',
+  taunt: 'All units: the city never sleeps. Neither do we.',
 }
 
 export type PlanCheck = { ok: true; plan: CommanderPlan } | { ok: false; errors: string[] }
@@ -31,10 +31,10 @@ export function validatePlan(input: unknown, maze: Maze): PlanCheck {
     errors.push('personality must be strategist | swarm | default')
   }
 
-  const ghosts = o.ghosts
-  if (!Array.isArray(ghosts) || ghosts.length !== GHOST_COUNT ||
-      !ghosts.every((g) => MODES.includes(g as GhostMode))) {
-    errors.push(`ghosts must be ${GHOST_COUNT} of ${MODES.join('|')}`)
+  const cops = o.cops
+  if (!Array.isArray(cops) || cops.length !== COP_COUNT ||
+      !cops.every((g) => MODES.includes(g as CopMode))) {
+    errors.push(`cops must be ${COP_COUNT} of ${MODES.join('|')}`)
   }
 
   const chokepoints: Point[] = []
@@ -66,7 +66,7 @@ export function validatePlan(input: unknown, maze: Maze): PlanCheck {
     plan: {
       version: 1,
       personality: personality as CommanderPlan['personality'],
-      ghosts: [...(ghosts as GhostMode[])],
+      cops: [...(cops as CopMode[])],
       chokepoints,
       taunt: (taunt as string).trim(),
     },

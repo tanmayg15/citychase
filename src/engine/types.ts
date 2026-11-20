@@ -12,6 +12,7 @@ export enum Dir {
   Left = 4,
 }
 
+/** Maze cells. Orb tiles from the maze files are plain street; Core tiles are smoke-bomb spots. */
 export enum Cell {
   Empty = 0,
   Wall = 1,
@@ -24,35 +25,39 @@ export interface Point {
   y: number
 }
 
-/** A parsed maze. `cells` is row-major, length width*height. */
+/** A parsed maze. `cells` is row-major, length width*height. Walls are buildings. */
 export interface Maze {
   width: number
   height: number
   cells: number[]
   playerSpawn: Point
+  /** Police garage tiles. */
   ghostSpawns: Point[]
 }
 
-export type GhostMode = 'chase' | 'ambush' | 'patrol' | 'cutoff'
+/** How a cop patrols while it has not spotted you. */
+export type CopMode = 'guardLoot' | 'guardExit' | 'patrol' | 'roam'
 
 export interface CommanderPlan {
   version: 1
   personality: 'strategist' | 'swarm' | 'default'
-  /** Exactly one mode per ghost (4 ghosts). */
-  ghosts: GhostMode[]
-  /** Open tiles the commander wants guarded. 0..6 entries. */
+  /** Exactly one mode per cop (4 cops). */
+  cops: CopMode[]
+  /** Open tiles the commander wants patrolled. 0..6 entries. */
   chokepoints: Point[]
   taunt: string
 }
 
 export interface WeatherModifiers {
-  /** Extra tiles of momentum in the old direction after a turn request. */
+  /** Extra tiles the car slides in the old direction after a turn request. */
   slipTiles: number
-  /** Ghosts take an extra step in `dir` every `every` ghost moves. */
+  /** Patrolling cops take an extra step in `dir` every `every` moves. */
   wind: { dir: Dir; every: number } | null
   /** Render-only: visible radius in tiles around the player. null = full view. */
   visionRadius: number | null
-  /** How long power cores last, in ticks. */
+  /** How far down a street a cop can spot you, in tiles. */
+  copVision: number
+  /** How long a smoke bomb blinds cops, in ticks. */
   powerTicks: number
 }
 
@@ -76,43 +81,67 @@ export interface PlayerState {
   clock: number
 }
 
-export type GhostStatus = 'house' | 'active' | 'frightened' | 'eaten'
+export type CopStatus = 'garage' | 'patrol' | 'chase' | 'search' | 'blind'
 
-export interface GhostState {
+export interface CopState {
   x: number
   y: number
   dir: Dir
-  mode: GhostMode
-  status: GhostStatus
+  mode: CopMode
+  status: CopStatus
   releaseTick: number
   homeX: number
   homeY: number
+  /** Current patrol/search destination. */
+  tx: number
+  ty: number
   patrolIdx: number
+  /** search: give up at this tick. blind: recover at this tick. */
+  until: number
   clock: number
   windClock: number
 }
 
-export type GameStatus = 'playing' | 'won' | 'lost' | 'timeout'
+export interface Loot {
+  x: number
+  y: number
+  value: number
+  taken: boolean
+}
+
+export interface Pickup {
+  x: number
+  y: number
+  taken: boolean
+}
+
+export type GameStatus = 'playing' | 'escaped' | 'busted' | 'timeout'
 
 export type GameEvent =
-  | { type: 'orb' }
-  | { type: 'core' }
-  | { type: 'ghostEaten'; ghost: number; points: number }
-  | { type: 'death'; livesLeft: number }
+  | { type: 'loot'; value: number }
+  | { type: 'exitOpen' }
+  | { type: 'smoke'; blinded: number }
+  | { type: 'spotted'; cop: number }
+  | { type: 'caught'; livesLeft: number }
   | { type: 'end'; status: GameStatus }
 
 export interface GameState {
   tick: number
   rng: number
   status: GameStatus
+  /** Final or running score (see engine.scoreOf). */
   score: number
+  lootScore: number
+  lootTaken: number
   lives: number
-  pelletsLeft: number
-  cells: number[]
+  loot: Loot[]
+  smokes: Pickup[]
+  exit: { x: number; y: number; open: boolean }
+  /** Ticks during which at least one cop could see you. */
+  heat: number
+  lastSeen: Point | null
   player: PlayerState
-  ghosts: GhostState[]
-  powerUntil: number
-  combo: number
+  cops: CopState[]
   pauseUntil: number
   /** Events from the most recent step only. Not part of the state hash. */
   events: GameEvent[]

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CLEAR_WEATHER, DEFAULT_PLAN, Dir, MAX_TICKS,
+  CLEAR_WEATHER, DEFAULT_PLAN, Dir, MAX_TICKS, canSee,
   createGame, hashState, parseMaze, planOrDefault, replay, rngInt, step,
   validateInputLog, validatePlan, weatherToModifiers,
   type GameConfig, type InputLog, type WeatherSnapshot,
@@ -56,10 +56,12 @@ describe('determinism', () => {
     expect(hashState(replay(config({ seed: 1 }), log))).not.toBe(hashState(replay(config({ seed: 2 }), log)))
   })
 
-  it('a single edited input changes the outcome (tampering is visible)', () => {
+  it('edited inputs change the outcome (tampering is visible)', () => {
+    // Note: a single edit can be a no-op if it is overridden before the car
+    // reaches a junction, so this rewrites the first second of driving.
     const cfg = config()
     const log = randomLog(11)
-    const edited: InputLog = log.map(([t, d], i) => (i === 3 ? [t, ((d % 4) + 1) as Dir] : [t, d]))
+    const edited: InputLog = log.map(([t, d], i) => (i < 3 ? [t, ((d % 4) + 1) as Dir] : [t, d]))
     expect(hashState(replay(cfg, log))).not.toBe(hashState(replay(cfg, edited)))
   })
 
@@ -74,10 +76,10 @@ describe('determinism', () => {
     const s = replay(config(), randomLog(2026))
     expect({ hash: hashState(s), score: s.score, tick: s.tick, status: s.status }).toMatchInlineSnapshot(`
       {
-        "hash": "c7321e04",
-        "score": 340,
-        "status": "lost",
-        "tick": 742,
+        "hash": "f4daa04a",
+        "score": 291,
+        "status": "busted",
+        "tick": 586,
       }
     `)
   })
@@ -92,14 +94,28 @@ describe('rules', () => {
     expect([s.player.x, s.player.y]).toEqual([9, 11])
   })
 
-  it('eating an orb scores 10 and removes it', () => {
+  it('places 10 spread-out loot drops and a far safehouse, the same every game', () => {
+    const a = createGame(config({ seed: 1 })), b = createGame(config({ seed: 999 }))
+    expect(a.loot.length).toBeGreaterThanOrEqual(5)
+    expect(a.loot).toEqual(b.loot)
+    expect(a.exit).toEqual(b.exit)
+    expect(a.exit.open).toBe(false)
+  })
+
+  it('driving over loot scores its value; enough loot opens the safehouse; reaching it escapes', () => {
     const cfg = config()
     const s = createGame(cfg)
+    s.cops = [] // no police for this rules check
+    // Put loot right next to the start and pretend the rest is already taken.
+    s.loot = [{ x: 8, y: 11, value: 300, taken: false }]
+    s.exit = { x: 7, y: 11, open: false }
     step(cfg, s, Dir.Left)
     for (let i = 0; i < 3; i++) step(cfg, s)
-    expect([s.player.x, s.player.y]).toEqual([8, 11])
-    expect(s.score).toBe(10)
-    expect(s.cells[11 * maze.width + 8]).toBe(0)
+    expect(s.lootScore).toBe(300)
+    expect(s.exit.open).toBe(true)
+    for (let i = 0; i < 4; i++) step(cfg, s)
+    expect(s.status).toBe('escaped')
+    expect(s.score).toBeGreaterThan(300 + 1000)
   })
 
   it('the run ends by MAX_TICKS even with no input', () => {
@@ -108,16 +124,55 @@ describe('rules', () => {
     expect(s.tick).toBeLessThanOrEqual(MAX_TICKS)
   })
 
-  it('power core makes ghosts frightened for powerTicks', () => {
+  it('cops see ahead down a street (headlights), not behind, not through buildings, not beyond range', () => {
+    expect(canSee(maze, 1, 3, Dir.Right, 10, 3, 9)).toBe(true) // open row 3, facing you
+    expect(canSee(maze, 1, 3, Dir.Left, 10, 3, 9)).toBe(false) // facing away: you can sneak up
+    expect(canSee(maze, 1, 3, Dir.Right, 10, 3, 5)).toBe(false) // out of range
+    expect(canSee(maze, 8, 1, Dir.Right, 10, 1, 9)).toBe(false) // building at (9,1) in between
+    expect(canSee(maze, 1, 1, Dir.Down, 2, 3, 9)).toBe(false) // not on the same street
+    expect(canSee(maze, 5, 5, Dir.Up, 5, 6, 9)).toBe(true) // right behind: always noticed
+  })
+
+  it('being seen raises heat, puts the cop in chase, and costs points', () => {
     const cfg = config()
     const s = createGame(cfg)
-    s.cells[11 * maze.width + 8] = 3 // put a core next to the player
-    s.pelletsLeft++
-    for (const g of s.ghosts) g.status = 'active'
+    const c = s.cops[0]
+    Object.assign(c, { status: 'patrol', x: 12, y: 11, tx: 12, ty: 11, dir: Dir.Left })
+    s.lootScore = 100
+    step(cfg, s)
+    expect(c.status).toBe('chase')
+    expect(s.heat).toBe(1)
+    expect(s.lastSeen).toEqual({ x: 9, y: 11 })
+    s.heat = 40
+    step(cfg, s)
+    expect(s.score).toBe(100 - Math.floor(41 / 4))
+  })
+
+  it('a smoke bomb blinds nearby cops for powerTicks, and blind cops cannot catch you', () => {
+    const cfg = config()
+    const s = createGame(cfg)
+    s.smokes = [{ x: 8, y: 11, taken: false }]
+    for (const c of s.cops) Object.assign(c, { status: 'patrol', x: 4, y: 11 })
     step(cfg, s, Dir.Left)
     for (let i = 0; i < 3; i++) step(cfg, s)
-    expect(s.ghosts.every((g) => g.status === 'frightened')).toBe(true)
-    expect(s.powerUntil).toBe(3 + cfg.modifiers.powerTicks)
+    expect(s.cops.every((c) => c.status === 'blind')).toBe(true)
+    expect(s.cops[0].until).toBe(3 + cfg.modifiers.powerTicks)
+    s.cops[0].x = s.player.x; s.cops[0].y = s.player.y
+    const lives = s.lives
+    step(cfg, s)
+    expect(s.lives).toBe(lives)
+  })
+
+  it('getting caught costs a life and resets you to the start; 3 catches = busted', () => {
+    const cfg = config()
+    const s = createGame(cfg)
+    for (let n = 3; n > 0; n--) {
+      Object.assign(s.cops[0], { status: 'patrol', x: s.player.x + 1, y: s.player.y, clock: 99, tx: s.player.x, ty: s.player.y, dir: Dir.Left })
+      s.pauseUntil = 0
+      step(cfg, s)
+    }
+    expect(s.status).toBe('busted')
+    expect(s.lives).toBe(0)
   })
 
   it('rain adds one tile of momentum on a turn', () => {
@@ -136,7 +191,7 @@ describe('rules', () => {
     expect(run({ ...CLEAR_WEATHER, condition: 'rain' })).toEqual([13, 11])
   })
 
-  it('wind pushes ghosts in the wind direction', () => {
+  it('wind pushes patrol cars in the wind direction', () => {
     const calm = replay(config(), randomLog(3))
     const windy = replay(config({}, { ...CLEAR_WEATHER, windSpeed: 15, windDeg: 0 }), randomLog(3))
     expect(hashState(calm)).not.toBe(hashState(windy))
@@ -145,10 +200,10 @@ describe('rules', () => {
 
 describe('weatherToModifiers', () => {
   it('maps conditions to modifiers', () => {
-    expect(weatherToModifiers(CLEAR_WEATHER)).toEqual({ slipTiles: 0, wind: null, visionRadius: null, powerTicks: 120 })
+    expect(weatherToModifiers(CLEAR_WEATHER)).toEqual({ slipTiles: 0, wind: null, visionRadius: null, copVision: 8, powerTicks: 100 })
     expect(weatherToModifiers({ ...CLEAR_WEATHER, condition: 'snow' }).slipTiles).toBe(1)
-    expect(weatherToModifiers({ ...CLEAR_WEATHER, isNight: true }).visionRadius).toBe(5)
-    expect(weatherToModifiers({ ...CLEAR_WEATHER, tempC: 31 }).powerTicks).toBe(180)
+    expect(weatherToModifiers({ ...CLEAR_WEATHER, isNight: true })).toMatchObject({ visionRadius: 5, copVision: 5 })
+    expect(weatherToModifiers({ ...CLEAR_WEATHER, tempC: 31 }).powerTicks).toBe(160)
     // Wind FROM the west (270°) blows ghosts east (Right).
     expect(weatherToModifiers({ ...CLEAR_WEATHER, windSpeed: 9, windDeg: 270 }).wind).toEqual({ dir: Dir.Right, every: 10 })
   })
@@ -172,19 +227,19 @@ describe('input log validation', () => {
 describe('commander plan validation', () => {
   it('accepts a valid plan and drops extra fields', () => {
     const r = validatePlan({
-      personality: 'swarm', ghosts: ['chase', 'chase', 'ambush', 'cutoff'],
+      personality: 'swarm', cops: ['roam', 'roam', 'guardLoot', 'guardExit'],
       chokepoints: [{ x: 4, y: 3 }], taunt: '  Rain slows you down. ', extra: 1,
     }, maze)
     expect(r.ok && r.plan).toEqual({
-      version: 1, personality: 'swarm', ghosts: ['chase', 'chase', 'ambush', 'cutoff'],
+      version: 1, personality: 'swarm', cops: ['roam', 'roam', 'guardLoot', 'guardExit'],
       chokepoints: [{ x: 4, y: 3 }], taunt: 'Rain slows you down.',
     })
   })
 
   it.each([
     ['null', null],
-    ['wrong ghost count', { ...DEFAULT_PLAN, ghosts: ['chase'] }],
-    ['unknown mode', { ...DEFAULT_PLAN, ghosts: ['chase', 'chase', 'chase', 'teleport'] }],
+    ['wrong cop count', { ...DEFAULT_PLAN, cops: ['roam'] }],
+    ['unknown mode', { ...DEFAULT_PLAN, cops: ['roam', 'roam', 'roam', 'teleport'] }],
     ['chokepoint in a wall', { ...DEFAULT_PLAN, chokepoints: [{ x: 0, y: 0 }] }],
     ['chokepoint off-grid', { ...DEFAULT_PLAN, chokepoints: [{ x: 500, y: 1 }] }],
     ['empty taunt', { ...DEFAULT_PLAN, taunt: '' }],

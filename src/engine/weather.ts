@@ -12,8 +12,10 @@ export interface WeatherSnapshot {
   isNight: boolean
 }
 
-export const BASE_POWER_TICKS = 120 // 6 s at 20 ticks/s
-export const HEAT_POWER_TICKS = 180
+export const BASE_POWER_TICKS = 100 // smoke: 5 s at 20 ticks/s
+export const HEAT_POWER_TICKS = 160
+export const DAY_COP_VISION = 8
+export const NIGHT_COP_VISION = 5
 export const HEAT_THRESHOLD_C = 28
 export const STRONG_WIND_MS = 8
 export const GALE_WIND_MS = 14
@@ -27,7 +29,7 @@ export const CLEAR_WEATHER: WeatherSnapshot = {
   isNight: false,
 }
 
-/** Wind FROM the north blows ghosts south (down the grid), and so on. */
+/** Wind FROM the north blows cars south (down the grid), and so on. */
 export function windDirFromDegrees(deg: number): Dir {
   const d = ((Math.round(deg) % 360) + 360) % 360
   if (d >= 315 || d < 45) return Dir.Down
@@ -46,6 +48,7 @@ export function weatherToModifiers(w: WeatherSnapshot): WeatherModifiers {
       ? { dir: windDirFromDegrees(w.windDeg), every: w.windSpeed >= GALE_WIND_MS ? 6 : 10 }
       : null,
     visionRadius: w.isNight ? NIGHT_VISION_RADIUS : null,
+    copVision: w.isNight ? NIGHT_COP_VISION : DAY_COP_VISION,
     powerTicks: w.tempC >= HEAT_THRESHOLD_C ? HEAT_POWER_TICKS : BASE_POWER_TICKS,
   }
 }
