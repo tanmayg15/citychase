@@ -119,7 +119,7 @@ export class CityScene {
   private lootGlow: THREE.Sprite[] = []
   private smokes: THREE.Group[] = []
   private puffs: THREE.Sprite[][] = []
-  private safehouse!: { door: THREE.MeshStandardMaterial; beam: THREE.Mesh; ring: THREE.Mesh }
+  private safehouse!: { pad: THREE.Mesh; beam: THREE.Mesh; ring: THREE.Mesh }
   private beams!: THREE.InstancedMesh
   private rain: THREE.LineSegments | null = null
   /** Wind: flying debris + dust streaks moving in the wind direction. */
@@ -420,22 +420,44 @@ export class CityScene {
     this.beams.count = 0
     this.scene.add(this.beams)
 
-    // Safehouse: small garage, a door that lights up, a beacon beam and a ground ring.
+    // Safehouse: a flat pad painted on the road (cars drive onto it, so
+    // nothing solid stands here). Locked = red hatching; open = green glow,
+    // a beacon beam and a pulsing ring.
+    const padTex = (open: boolean) => {
+      const c = document.createElement('canvas'); c.width = c.height = 256
+      const x = c.getContext('2d')!
+      const col = open ? '#3dff9a' : '#ff4a5a'
+      x.strokeStyle = col; x.lineWidth = 14
+      x.strokeRect(14, 14, 228, 228)
+      if (!open) {
+        x.save(); x.beginPath(); x.rect(20, 20, 216, 216); x.clip()
+        x.strokeStyle = 'rgba(255,74,90,0.55)'; x.lineWidth = 16
+        for (let i = -256; i < 512; i += 48) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 256, 256); x.stroke() }
+        x.restore()
+      }
+      x.fillStyle = col
+      x.font = 'bold 120px system-ui, sans-serif'
+      x.textAlign = 'center'; x.textBaseline = 'middle'
+      x.fillText('H', 128, 136)
+      const t = new THREE.CanvasTexture(c)
+      t.colorSpace = THREE.SRGBColorSpace
+      return t
+    }
     const garage = new THREE.Group()
-    const shell = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.45, 0.8), new THREE.MeshStandardMaterial({ color: 0x3a3f47, roughness: 0.8 }))
-    shell.position.y = 0.225
-    shell.castShadow = true
-    const doorMat = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0x3dff9a, emissiveIntensity: 0 })
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.3, 0.5), doorMat)
-    door.position.y = 0.16
+    const padMat = new THREE.MeshBasicMaterial({ map: padTex(false), transparent: true, depthWrite: false })
+    const openMap = padTex(true)
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 0.92).rotateX(-Math.PI / 2), padMat)
+    pad.position.y = 0.016
+    pad.userData.openMap = openMap
+    this.disposables.push(openMap)
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 8, 24, 1, true),
       new THREE.MeshBasicMaterial({ color: 0x3dff9a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }))
     beam.position.y = 4
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ color: 0x3dff9a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }))
     ring.position.y = 0.03
-    garage.add(shell, door, beam, ring)
-    this.safehouse = { door: doorMat, beam, ring }
+    garage.add(pad, beam, ring)
+    this.safehouse = { pad, beam, ring }
     this.scene.add(garage)
     // Position set once the first state arrives (exit comes from the engine).
     garage.name = 'safehouse'
@@ -587,7 +609,11 @@ export class CityScene {
     })
     const sh = this.scene.getObjectByName('safehouse')!
     sh.position.set(s.exit.x + 0.5, 0, s.exit.y + 0.5)
-    this.safehouse.door.emissiveIntensity = s.exit.open ? 3 : 0
+    const padMat = this.safehouse.pad.material as THREE.MeshBasicMaterial
+    if (s.exit.open && padMat.map !== this.safehouse.pad.userData.openMap) {
+      padMat.map = this.safehouse.pad.userData.openMap as THREE.Texture
+      padMat.needsUpdate = true
+    }
     ;(this.safehouse.beam.material as THREE.MeshBasicMaterial).opacity = s.exit.open ? 0.18 + 0.06 * Math.sin(timeMs / 200) : 0
     const ringT = (timeMs / 1000) % 1
     ;(this.safehouse.ring.material as THREE.MeshBasicMaterial).opacity = s.exit.open ? 1 - ringT : 0
