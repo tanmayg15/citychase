@@ -242,3 +242,17 @@ Tanmay chose **real 3D (Three.js)** over pseudo-3D or a polish-only pass, accept
 
 ### Tanmay verified or changed
 - _(Tanmay to fill in)_
+
+## Sound fixes, 2026-11-20 (Tanmay: "audio not playing on live", "sound plays when paused", "sounds for pickups and turning")
+
+### Agent did
+- **Silent on live:** audio was only unlocked by the practice Start screen. Daily runs have no in-game Start screen, and the game mounts after the async `startRun` request, which browsers don't treat as a user gesture. Fix: one shared audio engine (`getSfx()`), resumed **inside the Start run click**, plus a resume-on-next-gesture safety net.
+- **Sound while paused:** my first pause suspended the AudioContext, but the new safety net woke it on the next key press. Fix: pause is now a state inside the sound engine. Engine and siren are silenced and one-off sounds dropped until resume. The start and end screens are silent too.
+- **New sounds:** a tyre screech on every turn (longer and lower on wet roads) and a richer "cha-ching" for loot (smoke, spotted, caught, safehouse and the jingles already existed).
+- **Measured in the browser** by wrapping `AudioContext`: one context, `running`. While driving the engine gain was 0.16. **While paused (with arrow keys pressed): engine 0, siren 0, 0 new sounds.** After resuming the engine came back. Three turns produced three new sound sources (screeches).
+
+### Needs human verification
+- Listen on the live site: volume balance, and whether the screech or siren gets annoying.
+
+### Tanmay verified or changed
+- _(Tanmay to fill in)_
