@@ -5,7 +5,7 @@
  * hopping and pausing. Render-only: never feeds back into the engine.
  */
 import {
-  EATEN_PERIOD, FRIGHTENED_PERIOD, GHOST_PERIOD, PLAYER_PERIOD, type GameState,
+  PLAYER_PERIOD, copPeriod, type GameState,
 } from '../engine'
 
 export interface Pos { x: number; y: number }
@@ -14,12 +14,11 @@ interface Track { from: Pos; to: Pos; moveTick: number; period: number }
 
 function periodOf(s: GameState, i: number): number {
   if (i === 0) return PLAYER_PERIOD
-  const g = s.ghosts[i - 1]
-  return g.status === 'eaten' ? EATEN_PERIOD : g.status === 'frightened' ? FRIGHTENED_PERIOD : GHOST_PERIOD
+  return copPeriod(s.cops[i - 1])
 }
 
 function positions(s: GameState): Pos[] {
-  return [{ x: s.player.x, y: s.player.y }, ...s.ghosts.map((g) => ({ x: g.x, y: g.y }))]
+  return [{ x: s.player.x, y: s.player.y }, ...s.cops.map((c) => ({ x: c.x, y: c.y }))]
 }
 
 export class Motion {

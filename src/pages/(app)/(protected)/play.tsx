@@ -9,6 +9,7 @@ import { MAX_TICKS, type CommanderPlan, type GameState, type InputLog } from '@/
 import { callAction } from '@/game/api'
 import { buildConfig, shareString, weatherEmoji, weatherLabel } from '@/game/daily'
 import { GameCanvas, type Hud } from '@/game/GameCanvas'
+import { HudBar } from '@/game/HudBar'
 import { Leaderboard, topPercent, useDailyBoard } from '@/game/Leaderboard'
 import { RuleBadges } from '@/game/WeatherInfo'
 import type { WeatherRecord } from '@/game/weather-source'
@@ -77,19 +78,14 @@ export default function PlayPage() {
         {city && run && (
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 text-sm" data-testid="hud">
             <span className="opacity-80">{weatherLabel(city.city, city.timezone, run.weather)}</span>
-            {hud && (
-              <span className="font-mono">
-                <span data-testid="hud-score">{hud.score.toLocaleString('en-US')}</span>
-                {'  ·  '}{'♦'.repeat(Math.max(0, hud.lives))}{'  ·  '}{hud.secondsLeft}s
-                {hud.powered && <span className="ml-2 text-fuchsia-300">POWER</span>}
-              </span>
-            )}
+            {hud && <HudBar hud={hud} />}
           </div>
         )}
 
         {phase.kind === 'idle' && (
           <Centered>
-            <p className="mb-4 opacity-80">Ready? Your run is scored by replaying it on the server.</p>
+            <p className="mb-2 opacity-80">Grab loot, reach the safehouse, stay out of the headlights.</p>
+            <p className="mb-4 text-xs opacity-50">Your run is scored by replaying it on the server.</p>
             <Button onClick={start} testId="start-run">Start run</Button>
           </Centered>
         )}
@@ -100,7 +96,7 @@ export default function PlayPage() {
             <GameCanvas cfg={cfg} maxTicks={MAX_TICKS} onHud={setHud} onEnd={onEnd} />
             {hud && hud.countdown > 0 && (
               <Overlay>
-                <p className="mb-2 max-w-sm text-center text-sm italic text-orange-300">“{run.plan.taunt}”</p>
+                <p className="mb-2 max-w-sm text-center text-sm italic text-red-300">📻 “{run.plan.taunt}”</p>
                 <RuleBadges weather={run.weather} />
                 <p className="text-6xl font-black" style={{ textShadow: '0 0 20px #37f5ff' }}>{hud.countdown}</p>
               </Overlay>
@@ -137,7 +133,11 @@ function Result({ date, cityName, emoji, result, onAgain }: {
   const pct = topPercent(records.map((r) => r.data.score), result.best)
   const share = shareString({ city: cityName, weatherEmoji: emoji, score: result.best, topPercent: pct })
   const [copied, setCopied] = useState(false)
-  const outcome = { won: 'City cleared!', lost: 'Caught by the drones.', timeout: "Time's up." }[result.outcome] ?? result.outcome
+  const outcome = {
+    escaped: 'Clean getaway!',
+    busted: 'Busted. The cops got you.',
+    timeout: 'Out of time. The city locked down.',
+  }[result.outcome] ?? result.outcome
 
   return (
     <div className="mx-auto max-w-md py-6 text-center">

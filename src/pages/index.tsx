@@ -31,17 +31,17 @@ export default function Landing() {
       >
         <p className="mb-3 text-xs uppercase tracking-[0.4em] text-fuchsia-300/80">City Chase</p>
         <h1 className="mb-4 max-w-2xl text-4xl font-black tracking-tight sm:text-6xl" style={{ textShadow: '0 0 24px #8b5cf6' }}>
-          Real streets. Live weather. Ghosts that learn.
+          Real streets. Live weather. Cops that learn.
         </h1>
         <p className="mb-8 max-w-md opacity-75">
-          A neon maze chase where every level is a real city&apos;s street grid. One city a day, the same for
-          everyone, with every score verified by replaying the run on the server.
+          A top-down getaway heist on a real city&apos;s streets. One city a day, the same for everyone. Grab the loot,
+          lose the cops, reach the safehouse. Every score is verified by replaying the run on the server.
         </p>
         <Link
           to="/home"
           className="inline-flex items-center gap-2 rounded-lg bg-cyan-400 px-6 py-3 font-bold text-black shadow-[0_0_24px_#37f5ff] hover:bg-cyan-300"
         >
-          Play today&apos;s city
+          Start today&apos;s heist
         </Link>
         <p className="mt-10 text-xs opacity-40">Map data © OpenStreetMap contributors (ODbL).</p>
       </div>

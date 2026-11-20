@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import {
-  Dir, TICK_RATE, createGame, step,
+  Dir, LOOT_TO_OPEN_EXIT, TICK_RATE, createGame, step,
   type GameConfig, type GameState, type InputLog,
 } from '../engine'
 import { Motion } from './motion'
@@ -28,7 +28,13 @@ export interface Hud {
   secondsLeft: number
   status: GameState['status']
   countdown: number
-  powered: boolean
+  lootTaken: number
+  lootTotal: number
+  lootToOpen: number
+  exitOpen: boolean
+  /** True while at least one cop is chasing you. */
+  wanted: boolean
+  heat: number
 }
 
 export function GameCanvas({
@@ -130,7 +136,12 @@ export function GameCanvas({
         score: s.score, lives: s.lives, status: s.status,
         secondsLeft: Math.ceil((maxTicks - s.tick) / TICK_RATE),
         countdown: Math.ceil(countdown / 1000),
-        powered: s.powerUntil > s.tick,
+        lootTaken: s.lootTaken,
+        lootTotal: s.loot.length,
+        lootToOpen: Math.min(LOOT_TO_OPEN_EXIT, s.loot.length),
+        exitOpen: s.exit.open,
+        wanted: s.cops.some((c) => c.status === 'chase'),
+        heat: s.heat,
       })
       if (s.status !== 'playing' && !ended) {
         ended = true

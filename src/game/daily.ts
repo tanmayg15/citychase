@@ -80,10 +80,10 @@ const ARROWS = ['', '↑', '→', '↓', '←']
 export function ruleBadges(w: WeatherSnapshot): string[] {
   const m = weatherToModifiers(w)
   const out: string[] = []
-  if (m.slipTiles) out.push('Slippery streets')
-  if (m.wind) out.push(`Wind pushes drones ${ARROWS[m.wind.dir]}`)
-  if (m.visionRadius !== null) out.push('Night: short sight')
-  if (m.powerTicks > 120) out.push('Heat: longer power')
+  if (m.slipTiles) out.push('Wet roads: your car slides')
+  if (m.wind) out.push(`Crosswind pushes patrols ${ARROWS[m.wind.dir]}`)
+  if (m.visionRadius !== null) out.push('Night: short sight, shorter headlights')
+  if (m.powerTicks > 100) out.push('Heat: smoke lasts longer')
   if (out.length === 0) out.push('Clear: no modifiers')
   return out
 }

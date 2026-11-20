@@ -7,6 +7,7 @@ import { CITY_MAZES } from '@/cities'
 import { CLEAR_WEATHER, DEFAULT_PLAN, MAX_TICKS, type WeatherSnapshot } from '@/engine'
 import { buildConfig } from '@/game/daily'
 import { GameCanvas, type Hud } from '@/game/GameCanvas'
+import { HudBar } from '@/game/HudBar'
 
 const WEATHERS: Record<string, WeatherSnapshot> = {
   clear: CLEAR_WEATHER,
@@ -39,7 +40,8 @@ export default function PracticePage() {
             {Object.keys(WEATHERS).map((w) => <option key={w}>{w}</option>)}
           </select>
           <button onClick={() => setGame((g) => g + 1)} className="rounded bg-cyan-400 px-3 py-1 font-bold text-black">Restart</button>
-          {hud && <span className="font-mono" data-testid="practice-hud">{hud.score} · lives {hud.lives} · {hud.secondsLeft}s{hud.countdown ? ` · starts in ${hud.countdown}` : ''}</span>}
+          {hud && <HudBar hud={hud} />}
+          {hud?.countdown ? <span>starts in {hud.countdown}</span> : null}
           {last && <span className="opacity-70">{last}</span>}
         </div>
         <GameCanvas
@@ -47,7 +49,7 @@ export default function PracticePage() {
           cfg={cfg}
           maxTicks={MAX_TICKS}
           onHud={setHud}
-          onEnd={(log, s) => setLast(`Last game: ${s.status}, ${s.score} pts, ${log.length} inputs`)}
+          onEnd={(log, s) => setLast(`Last game: ${s.status}, ${s.score} pts, ${s.lootTaken} loot, ${log.length} inputs`)}
         />
       </div>
     </main>

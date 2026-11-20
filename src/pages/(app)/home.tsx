@@ -17,8 +17,8 @@ export default function HomePage() {
           {city.name}, {city.city}
         </h1>
         <p className="mt-2 text-sm opacity-70">
-          Everyone plays the same real street grid today. Collect the orbs, dodge the drones, grab a power core to
-          turn the chase around.
+          Today's heist is on a real street grid, the same for everyone. Grab the loot, reach the safehouse, and stay
+          out of the patrol cars' headlights. Smoke bombs buy you a few seconds.
         </p>
         <WeatherInfo city={city} />
 
@@ -27,7 +27,7 @@ export default function HomePage() {
           data-testid="play-daily"
           className="mt-6 inline-block rounded-lg bg-cyan-400 px-6 py-3 font-bold text-black shadow-[0_0_24px_#37f5ff] hover:bg-cyan-300"
         >
-          Play today's city
+          Start today's heist
         </Link>
         <p className="mt-2 text-xs opacity-50">Arrow keys / WASD, or swipe. Scores are verified by replaying your run on the server.</p>
 
