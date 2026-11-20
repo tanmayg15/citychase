@@ -134,6 +134,8 @@ For each phase: what the agent did, what needs a human to check, and what Tanmay
   - only the owner can read ops status or flip the switch.
 - Browser (local): `/home` and `/ops` (sign-in panel) load. Fixed a stale Vite cache that made app pages 404.
 
+- Deployed Phase 4 in mock mode after Tanmay approved. Live: `/home`, `/ops` and `/play` return 200, `/home` renders with no console errors, and an unauthenticated `getOpsStatus` returns 401.
+
 ### Not verified by the agent
 - **No real OpenWeatherMap call has been made yet.** Mock mode is the default and the kill switch defaults to OFF.
 - The signed-in HUD and the owner console have only been checked through unit tests, not in a browser while signed in.
