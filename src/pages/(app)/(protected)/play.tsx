@@ -10,6 +10,7 @@ import { callAction } from '@/game/api'
 import { buildConfig, shareString, weatherEmoji, weatherLabel } from '@/game/daily'
 import { GameCanvas, type Hud } from '@/game/GameCanvas'
 import { HudBar } from '@/game/HudBar'
+import { useView } from '@/game/useView'
 import { Leaderboard, topPercent, useDailyBoard } from '@/game/Leaderboard'
 import { RuleBadges } from '@/game/WeatherInfo'
 import type { WeatherRecord } from '@/game/weather-source'
@@ -42,6 +43,7 @@ type Phase =
 export default function PlayPage() {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [hud, setHud] = useState<Hud | null>(null)
+  const [view, setView] = useView()
 
   const start = useCallback(async () => {
     setPhase({ kind: 'starting' })
@@ -74,7 +76,7 @@ export default function PlayPage() {
 
   return (
     <div className="min-h-full px-3 py-4 text-[#e8e0ff]" style={{ background: '#07030f' }}>
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         {city && run && (
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 text-sm" data-testid="hud">
             <span className="opacity-80">{weatherLabel(city.city, city.timezone, run.weather)}</span>
@@ -87,13 +89,16 @@ export default function PlayPage() {
             <p className="mb-2 opacity-80">Grab loot, reach the safehouse, stay out of the headlights.</p>
             <p className="mb-4 text-xs opacity-50">Your run is scored by replaying it on the server.</p>
             <Button onClick={start} testId="start-run">Start run</Button>
+            <button onClick={() => setView(view === '3d' ? '2d' : '3d')} className="mt-3 text-xs underline opacity-60" data-testid="view-toggle">
+              Graphics: {view === '3d' ? '3D (switch to 2D)' : '2D (switch to 3D)'}
+            </button>
           </Centered>
         )}
         {phase.kind === 'starting' && <Centered><p className="opacity-70">Getting today's city…</p></Centered>}
 
         {cfg && run && (phase.kind === 'playing' || phase.kind === 'submitting') && (
           <div className="relative">
-            <GameCanvas cfg={cfg} maxTicks={MAX_TICKS} onHud={setHud} onEnd={onEnd} />
+            <GameCanvas cfg={cfg} view={view} weather={run.weather} maxTicks={MAX_TICKS} onHud={setHud} onEnd={onEnd} />
             {hud && hud.countdown > 0 && (
               <Overlay>
                 <p className="mb-2 max-w-sm text-center text-sm italic text-red-300">📻 “{run.plan.taunt}”</p>

@@ -8,6 +8,7 @@ import { CLEAR_WEATHER, DEFAULT_PLAN, MAX_TICKS, type WeatherSnapshot } from '@/
 import { buildConfig } from '@/game/daily'
 import { GameCanvas, type Hud } from '@/game/GameCanvas'
 import { HudBar } from '@/game/HudBar'
+import { useView } from '@/game/useView'
 
 const WEATHERS: Record<string, WeatherSnapshot> = {
   clear: CLEAR_WEATHER,
@@ -23,6 +24,7 @@ export default function PracticePage() {
   const [game, setGame] = useState(0)
   const [hud, setHud] = useState<Hud | null>(null)
   const [last, setLast] = useState<string>('')
+  const [view, setView] = useView()
   const cfg = useMemo(
     () => buildConfig({ cityId, seed: 1000 + game, weather: WEATHERS[weather], plan: DEFAULT_PLAN }),
     [cityId, weather, game],
@@ -30,7 +32,7 @@ export default function PracticePage() {
 
   return (
     <main className="min-h-screen px-3 py-4 text-[#e8e0ff]" style={{ background: '#07030f' }}>
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
           <strong>Practice (unverified)</strong>
           <select value={cityId} onChange={(e) => { setCityId(e.target.value); setGame((g) => g + 1) }} className="rounded bg-white/10 px-2 py-1">
@@ -40,6 +42,9 @@ export default function PracticePage() {
             {Object.keys(WEATHERS).map((w) => <option key={w}>{w}</option>)}
           </select>
           <button onClick={() => setGame((g) => g + 1)} className="rounded bg-cyan-400 px-3 py-1 font-bold text-black">Restart</button>
+          <button onClick={() => setView(view === '3d' ? '2d' : '3d')} className="rounded border border-white/30 px-3 py-1" data-testid="view-toggle">
+            {view === '3d' ? 'Switch to 2D' : 'Switch to 3D'}
+          </button>
           {hud && <HudBar hud={hud} />}
           {hud?.countdown ? <span>starts in {hud.countdown}</span> : null}
           {last && <span className="opacity-70">{last}</span>}
@@ -47,6 +52,8 @@ export default function PracticePage() {
         <GameCanvas
           key={game}
           cfg={cfg}
+          view={view}
+          weather={WEATHERS[weather]}
           maxTicks={MAX_TICKS}
           onHud={setHud}
           onEnd={(log, s) => setLast(`Last game: ${s.status}, ${s.score} pts, ${s.lootTaken} loot, ${log.length} inputs`)}
