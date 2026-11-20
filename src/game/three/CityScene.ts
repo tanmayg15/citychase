@@ -116,6 +116,7 @@ export class CityScene {
   private cops: CarParts[] = []
   private copYaw: number[] = []
   private playerYaw = 0
+  private lastPlayerPos: { x: number; y: number } | null = null
   private loot: THREE.Mesh[] = []
   private lootGlow: THREE.Sprite[] = []
   private smokes: THREE.Group[] = []
@@ -657,7 +658,17 @@ export class CityScene {
     // Getaway car.
     const pp = pos[0] ?? s.player
     this.player.group.position.set(pp.x + 0.5, 0, pp.y + 0.5)
-    if (s.player.dir !== Dir.None) this.playerYaw = turn(this.playerYaw, YAW[s.player.dir])
+    // Face the way the car is actually moving on screen (its drawn position
+    // leads into turns), not the engine's last direction, so it rotates into
+    // corners instead of sliding sideways and snapping.
+    const prev = this.lastPlayerPos
+    this.lastPlayerPos = { x: pp.x, y: pp.y }
+    const vx = prev ? pp.x - prev.x : 0, vz = prev ? pp.y - prev.y : 0
+    if (Math.hypot(vx, vz) > 0.002 && Math.hypot(vx, vz) < 1) {
+      this.playerYaw = turn(this.playerYaw, Math.atan2(-vz, vx))
+    } else if (s.player.dir !== Dir.None && !prev) {
+      this.playerYaw = YAW[s.player.dir]
+    }
     this.player.group.rotation.y = this.playerYaw
 
     // Police cars, light bars and smoke.

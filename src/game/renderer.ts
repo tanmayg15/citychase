@@ -4,7 +4,7 @@
  * once per size into an offscreen canvas.
  */
 import { beamTiles, Cell, Dir, type CopState, type GameConfig, type GameState } from '../engine'
-import type { Pos } from './motion'
+import { predictNextDir, type Pos } from './motion'
 
 export const PALETTE = {
   night: '#05060a',
@@ -273,7 +273,7 @@ export function drawFrame(
   ctx.save()
   ctx.shadowColor = PALETTE.getaway
   ctx.shadowBlur = tile * 0.6
-  car(ctx, px, py, s.player.dir, tile, PALETTE.getaway, '#2a1606')
+  car(ctx, px, py, predictNextDir(cfg.maze, s) || s.player.dir, tile, PALETTE.getaway, '#2a1606')
   ctx.restore()
 
   // Last-seen marker: where the cops think you are.

@@ -389,3 +389,9 @@ A leaderboard "database" (suggested a CSV/JSON file): top 10 all-time plus your 
 - **Fix (render-only, no rule change, replays unaffected):** the player's car is now drawn from the tile the engine has it on *toward the tile it will actually enter next*, predicted with the engine's own steering rule (`predictNextDir`: pending key, rain slide, walls), with light smoothing when the prediction changes. Cops keep the old interpolation.
 - **Tests:** "drawn exactly on its tile when the engine arrives" and "a turn pressed while drawn at a junction happens at that junction" (168 pass). Browser: a turn at the next junction happened where it was pressed.
 - Deployed together with the faster lobby background (39999a2), at Tanmay's request ("fix this and then deploy").
+
+## Car didn't rotate into turns (2026-11-20)
+- **Tanmay:** after the responsiveness fix, the car model kept facing straight and glitched when turning.
+- **Cause:** the position now leads into turns (previous fix), but the yaw still followed the engine's `player.dir`, which only changes when the car leaves the tile, so the model slid sideways around corners and then snapped.
+- **Fix:** the 3D car's yaw follows its **on-screen velocity** (from the drawn position, eased), and the 2D minimap car uses the predicted next direction. Render-only.
+- **Checked:** screenshots during a right→up turn show the car facing right, then angled mid-corner, then facing up. 168 tests pass.
